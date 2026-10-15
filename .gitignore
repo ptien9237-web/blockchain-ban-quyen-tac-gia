@@ -53,6 +53,4 @@ bookchainlibrary.sql
 *.bak
 
 # AI agent & IDE scratch directories
-.gemini/
 scratch/
-impeccable/
