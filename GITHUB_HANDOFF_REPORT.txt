@@ -1,0 +1,220 @@
+================================================================================
+BÁO CÁO CHUẨN BỊ VÀ BÀN GIAO MÃ NGUỒN GITHUB: BOOKCHAIN LIBRARY
+(GITHUB HANDOFF & REPOSITORY READINESS REPORT)
+================================================================================
+Dự án: BookChain Library — Digital Library & Blockchain Copyright Registry
+Thời điểm thực hiện: 15/10/2026
+Người thực hiện: Antigravity Autonomous Agent (Pair Programming with User)
+Trạng thái Local Git: ĐÃ KHỞI TẠO, ĐÃ COMMIT SẠCH 100%, SẴN SÀNG PUSH
+Trạng thái Push GitHub: CHƯA PUSH (Chờ người dùng cung cấp / xác nhận Remote URL)
+Branch mặc định: main
+Commit Hash: 1bacccff3607727c79624a55eeef0e1d95d56941 (short: 1bacccf)
+
+================================================================================
+1. CÁC BƯỚC ĐÃ THỰC HIỆN TRỰC TIẾP
+================================================================================
+1.1. Rà soát & Đọc tài liệu bàn giao hiện hữu:
+  - Đã đọc và phân tích toàn diện: package.json, package-lock.json, .gitignore,
+    .env.example, SETUP_GUIDE.txt, HANDOFF_CHECKLIST.txt, HANDOFF_READINESS_REPORT.txt,
+    PROJECT_NOTES.txt và thư mục project_documentation/.
+  - Đối chiếu phiên bản phần mềm: Node.js v24.19.0, npm 11.17.0, SQL Server 2025,
+    Solidity 0.8.28, React 19, Express 5, Ethers.js v6.
+
+1.2. Rà soát bảo mật & Phát hiện rủi ro rò rỉ dữ liệu:
+  - Phát hiện tệp CSDL thô `bookchainlibrary.sql` (1.12 MB) chứa dữ liệu kết xuất runtime
+    từ máy dev cục bộ, bao gồm:
+    * Địa chỉ email cá nhân thật của lập trình viên: cuongstore@gmail.com, ptien9237@gmail.com.
+    * Mã băm mật khẩu người dùng bcrypt ($2b$10$...).
+    * Danh sách phiên làm việc và mã băm token SHA-256 (bảng dbo.Sessions).
+    * Đường dẫn tệp cục bộ cố định (hardcoded C:\Program Files\Microsoft SQL Server\...).
+  - Giải pháp xử lý an toàn:
+    * Giữ nguyên tệp gốc `bookchainlibrary.sql` trên ổ đĩa của người dùng (không xóa).
+    * Thêm quy tắc `bookchainlibrary.sql` vào `.gitignore` để ngăn chặn upload lên GitHub.
+    * Tạo tệp `BookChainLibrary_SQLServer.sql` mới (83.7 KB) hoàn toàn sạch sẽ, chứa đúng
+      100% cấu trúc DDL của 17 bảng, chỉ mục, khóa ngoại, ràng buộc và chỉ seed duy nhất
+      3 vai trò hệ thống (READER, AUTHOR, ADMIN) theo đúng chuẩn SETUP_GUIDE.txt.
+
+1.3. Cập nhật và siết chặt quy tắc `.gitignore`:
+  - Loại trừ triệt để các tệp nhạy cảm và tệp build có thể tái tạo:
+    * `.env`, `.env.*` (chỉ giữ lại `.env.example` an toàn).
+    * `node_modules/` (~300MB - người nhận chỉ cần chạy `npm install`).
+    * `dist/`, `dist-ssr/` (kết quả build Vite).
+    * `cache/`, `artifacts/`, `typechain/`, `typechain-types/` (Hardhat compilation artifacts).
+    * `storage/books/*` và `storage/ipfs/*` (loại bỏ tệp tải lên riêng tư).
+    * `bookchainlibrary.sql` và `*.bak` (loại bỏ dữ liệu người dùng thật).
+    * `.gemini/`, `scratch/`, `impeccable/`, `.vscode/*`, `.idea/`.
+    * Tệp rác OS: `.DS_Store`, `Thumbs.db`, `desktop.ini`, `ehthumbs.db`.
+  - Tạo tệp `storage/books/.gitkeep` và `storage/ipfs/.gitkeep` để Git duy trì cấu trúc
+    thư mục rỗng trên máy người clone, đảm bảo backend không bị lỗi thiếu thư mục khi ghi tệp.
+
+1.4. Khởi tạo Git & Thiết lập nhánh chuẩn:
+  - Khởi tạo Git repository an toàn: `git init`.
+  - Đổi tên nhánh mặc định thành `main`: `git branch -M main`.
+  - Kiểm tra trạng thái staged: 177 tệp mã nguồn, tài liệu, migration và cấu hình đã được thêm.
+  - Tạo commit chuẩn ban đầu:
+    Commit message: "feat: complete initial verified codebase for BOOKCHAIN LIBRARY (production-ready architecture)"
+    Commit Hash: 1bacccff3607727c79624a55eeef0e1d95d56941
+
+================================================================================
+2. DANH MỤC THÀNH PHẦN ĐƯỢC GIỮ LẠI VÀ LOẠI BỎ KHỎI GIT
+================================================================================
+2.1. Các thư mục và tệp ĐƯỢC GIỮ LẠI (TRACKED & COMMITTED):
+  -----------------------------------------------------------------------------
+  Thành phần                   | Lý do giữ lại
+  -----------------------------------------------------------------------------
+  src/                         | Toàn bộ mã nguồn Frontend React 19 + TypeScript.
+  server/                      | Toàn bộ mã nguồn Backend Express 5 + TypeScript.
+  contracts/                   | Mã nguồn Smart Contract BookCopyrightRegistry.sol.
+  scripts/                     | Kịch bản Web3 deploy, exportArtifacts, grantRole, interact.
+  deployments/                 | Bản ghi triển khai contract localhost.json và hardhat.json.
+  src/contracts/               | ABI & địa chỉ contract cho Frontend (deployedAddresses.json).
+  server/contracts/            | ABI & địa chỉ contract cho Backend (contractClient.ts).
+  test/contracts/              | 29 bài kiểm thử Smart Contract (Hardhat Mocha runner).
+  tests/                       | 9 tệp kiểm thử tích hợp toàn diện hệ thống (Vitest).
+  BookChainLibrary_SQLServer.sql| Kịch bản DDL tạo CSDL sạch và 3 vai trò hệ thống.
+  server/db/migrations/        | Kịch bản migration CSDL (001_create_invitations.sql).
+  server/db/seedBooks.ts       | Kịch bản nạp 3 cuốn sách số mẫu kinh điển.
+  server/scripts/bootstrapAdmin.ts | Script CLI cấp quyền ADMIN an toàn không lộ secret.
+  package.json, lockfile       | Quản lý dependencies nhất quán 100%.
+  tsconfig*.json, vite*, etc.  | Cấu hình trình biên dịch và bundler.
+  project_documentation/       | 7 tài liệu đặc tả kiến trúc, luồng dữ liệu, bảo mật Web3.
+  SETUP_GUIDE.txt, HANDOFF*    | Bộ hướng dẫn cài đặt và báo cáo bàn giao chi tiết.
+  storage/books/.gitkeep       | Giữ chỗ thư mục lưu trữ sách số.
+  storage/ipfs/.gitkeep        | Giữ chỗ thư mục cache IPFS.
+  -----------------------------------------------------------------------------
+
+2.2. Các thư mục và tệp ĐÃ LOẠI BỎ (IGNORED VIA .gitignore):
+  -----------------------------------------------------------------------------
+  Thành phần                   | Lý do loại bỏ
+  -----------------------------------------------------------------------------
+  .env                         | Chứa mật khẩu SQL Server và JWT secret cục bộ.
+  bookchainlibrary.sql         | Chứa email cá nhân thật, password hash và session token.
+  node_modules/                | Tái tạo bằng lệnh `npm install`.
+  dist/                        | Tái tạo bằng lệnh `npm run build`.
+  cache/, artifacts/           | Tái tạo bằng lệnh `npm run contracts:compile`.
+  storage/books/* (trừ gitkeep)| Tránh rò rỉ bản thảo sách tải lên trong quá trình test.
+  storage/ipfs/* (trừ gitkeep) | Tránh rò rỉ dữ liệu cache tạm thời của IPFS node.
+  scratch/, .gemini/           | Tệp tạm thời của AI agent và công cụ IDE.
+  -----------------------------------------------------------------------------
+
+================================================================================
+3. KẾT QUẢ KIỂM TRA BẢO MẬT (SECURITY AUDIT RESULTS)
+================================================================================
+Đã quét toàn bộ 177 tệp được theo dõi trong commit 1bacccf:
+  [PASS] Không chứa mật khẩu SQL Server thật (chỉ có placeholder trong .env.example).
+  [PASS] Không chứa JWT secret thật (chỉ có fallback phát triển an toàn).
+  [PASS] Không chứa Private Key cá nhân có giá trị tiền tệ thật.
+         (Chỉ tham chiếu Hardhat Account #0 công khai 0xac09...f2ff80 cho môi trường test local).
+  [PASS] Không chứa API Token bên thứ ba (Pinata JWT, Etherscan API key đều là placeholder).
+  [PASS] Không chứa địa chỉ email cá nhân thật trong CSDL (đã thay bằng schema sạch).
+  [PASS] Không chứa bản thảo sách riêng tư hay tệp tải lên nhạy cảm trong thư mục storage.
+  [PASS] Tệp `.env` thật hoàn toàn không bị theo dõi hay staged vào Git.
+
+================================================================================
+4. KẾT QUẢ KIỂM THỬ THỰC TẾ TRƯỚC KHI BÀN GIAO
+================================================================================
+4.1. Phân tích cú pháp (Oxlint):
+  - Lệnh: `npm run lint`
+  - Kết quả: PASS (0 errors, 29 stylistic warnings trên 97 tệp).
+
+4.2. Biên dịch & Đóng gói sản phẩm (Production Build):
+  - Lệnh: `npm run build` (`tsc -b && vite build`)
+  - Kết quả: PASS (0 TypeScript errors, 2102 modules transformed, built trong 2.49s).
+
+4.3. Biên dịch Smart Contract:
+  - Lệnh: `npm run contracts:compile`
+  - Kết quả: PASS (Solidity 0.8.28, OpenZeppelin v5.6.1 compiled thành công).
+
+4.4. Kiểm thử Smart Contract (Hardhat Test Suite):
+  - Lệnh: `npm run contracts:test`
+  - Kết quả: 29/29 tests PASSED (100%) trong 4.0s.
+  - Bao gồm: Deployment, Roles, Register & Retrieve, verifyHash, Duplicate Prevention,
+    Access Control, Multi-Version, Lifecycle State Machine, TypeScript-Solidity SHA-256 Parity,
+    Pausable Circuit Breaker.
+
+4.5. Kiểm thử Tích hợp API & CSDL (Vitest):
+  - Môi trường: Kết nối trực tiếp SQL Server localhost:1433.
+  - tests/api.test.ts (Auth, Session, RBAC)                : 13/13 tests PASSED (100%)
+  - tests/step02_books.test.ts (Book CRUD, Upload, Access): 22/22 tests PASSED (100%)
+  - tests/step02_1_invitations.test.ts (Invitations)      : 19/19 tests PASSED (100%)
+  - tests/step07_author_approval.test.ts (Author Approval): 19/19 tests PASSED (100%)
+  - tests/step03_blockchain_utils.test.ts (Crypto Utils) : 7/7 tests PASSED (100%)
+  - npm run db:migrate (Author Invitations Migration)     : SUCCESS (001_create_invitations.sql)
+
+================================================================================
+5. TRẠNG THÁI BRANCH, REMOTE VÀ PUSH
+================================================================================
+- Branch hiện tại : `main`
+- Commit Hash     : `1bacccff3607727c79624a55eeef0e1d95d56941`
+- Remote URL      : Chưa cấu hình (Chưa có origin)
+- Trạng thái Push : CHƯA THỰC HIỆN PUSH LÊN GITHUB
+  * Lý do: Cần người dùng tạo repository mới trên GitHub (hoặc cung cấp URL repository hiện có)
+    và cấp quyền truy cập (Personal Access Token hoặc SSH Key).
+
+================================================================================
+6. HƯỚNG DẪN DÀNH CHO BẠN ĐỂ ĐẨY CODE LÊN GITHUB (UPLOAD INSTRUCTIONS)
+================================================================================
+Thực hiện các bước đơn giản sau trên máy tính của bạn:
+
+Bước 1: Tạo một Repository mới trên GitHub:
+  1. Mở trình duyệt và truy cập: https://github.com/new
+  2. Đặt tên Repository, ví dụ: `bookchain-library` (hoặc tên bạn muốn).
+  3. Chọn chế độ: "Private" (Khuyến nghị cho bài nộp / dự án nhóm) hoặc "Public".
+  4. QUAN TRỌNG: KHÔNG tích chọn "Add a README file", KHÔNG chọn .gitignore hay license
+     (bởi vì dự án của chúng ta đã có sẵn toàn bộ các tệp này).
+  5. Nhấn nút "Create repository".
+
+Bước 2: Gắn Remote và Đẩy (Push) lên GitHub:
+  Mở PowerShell tại thư mục dự án và chạy 2 lệnh sau:
+
+  git remote add origin https://github.com/<Tên-Tài-Khoản-Của-Bạn>/<Tên-Repo>.git
+  git push -u origin main
+
+  (Ví dụ: git remote add origin https://github.com/tien-hp/bookchain-library.git)
+
+================================================================================
+7. HƯỚNG DẪN DÀNH CHO THÀNH VIÊN MỚI SAU KHI CLONE DỰ ÁN
+================================================================================
+Bất kỳ thành viên nào trong nhóm sau khi clone repository về máy đều có thể khởi
+chạy hệ thống 100% theo các bước chuẩn sau:
+
+Bước 1: Clone và Cài đặt thư viện:
+  git clone <URL_REPO>
+  cd <THU_MUC_REPO>
+  npm install
+
+Bước 2: Cấu hình biến môi trường:
+  Copy-Item .env.example .env
+  (Mở tệp .env, điều chỉnh mật khẩu SQL Server của máy bạn tại DB_PASSWORD).
+
+Bước 3: Khởi tạo Cơ sở dữ liệu:
+  1. Mở SQL Server Management Studio (SSMS), kết nối vào localhost.
+  2. Mở và thực thi tệp `BookChainLibrary_SQLServer.sql` (nhấn F5).
+  3. Tại terminal, chạy lệnh migration bảng mã mời:
+       npm run db:migrate
+
+Bước 4: Khởi chạy Hardhat Node và Triển khai Smart Contract:
+  Terminal 1:
+    npm run contracts:node
+  Terminal 2:
+    npm run contracts:deploy:local
+
+Bước 5: Khởi động Ứng dụng:
+  Terminal 3:
+    npm run dev:all
+  (Hoặc chạy riêng `npm run dev` cho frontend cổng 5173 và `npm run server` cho backend cổng 5000).
+
+Bước 6: Tạo Quản trị viên đầu tiên (Bootstrap Admin):
+  1. Mở trình duyệt tại http://localhost:5173/login, chọn Đăng ký tài khoản (ví dụ admin@bookchain.io).
+  2. Tại terminal, cấp quyền Admin an toàn:
+       npm run bootstrap:admin -- admin@bookchain.io
+
+Bước 7: Chạy kiểm thử:
+  npm run contracts:test
+  npm test
+  npm run lint
+  npm run build
+
+================================================================================
+Báo cáo hoàn tất. Toàn bộ mã nguồn đã sẵn sàng 100% để lưu trữ và cộng tác nhóm!
+================================================================================
