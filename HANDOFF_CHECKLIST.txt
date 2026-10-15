@@ -1,0 +1,193 @@
+================================================================================
+DANH MỤC KIỂM TRA BÀN GIAO DỰ ÁN BOOKCHAIN LIBRARY
+(HANDOFF CHECKLIST & ARTIFACT SANITIZATION GUIDELINE)
+================================================================================
+Dự án: BookChain Library — Digital Library & Blockchain Copyright Registry
+Phiên bản bàn giao: 1.0 (Production-Ready Architecture)
+Ngày lập: 15/10/2026
+Mục đích: Hướng dẫn người bàn giao (Sender) chuẩn bị gói mã nguồn sạch sẽ, đầy đủ
+và tuyệt đối an toàn; đồng thời giúp người tiếp nhận (Recipient) kiểm đếm toàn diện
+các thành phần trước khi đưa vào vận hành.
+
+================================================================================
+1. NGUYÊN TẮC BÀN GIAO CỐT LÕI
+================================================================================
+1. Bảo mật tuyệt đối: Không để lọt bất kỳ mật khẩu thật, khóa riêng tư (Private Key)
+   cá nhân, API key của bên thứ ba, hay dữ liệu định danh cá nhân vào gói bàn giao.
+2. Đầy đủ và tự cung ứng (Self-Contained): Người nhận có thể tái lập 100% môi trường
+   từ trạng thái sạch chỉ với các tệp được bàn giao kèm `package-lock.json`.
+3. Tách biệt tệp tái tạo được vs tệp kiến trúc: Loại bỏ các thư mục build/cache cồng
+   kềnh (node_modules, dist, cache), nhưng BẮT BUỘC giữ lại các artifact blockchain
+   đã được trích xuất (exported) mà mã nguồn TypeScript trực tiếp import.
+4. Không chỉnh sửa project gốc: Việc dọn dẹp hoặc đóng gói bàn giao phải được thực
+   hiện trên bản sao (staging copy) hoặc qua lệnh archive, không xóa tệp gốc.
+
+================================================================================
+2. NHỮNG GÌ BẮT BUỘC PHẢI GỬI (MANDATORY INCLUSIONS)
+================================================================================
+
+[x] 2.1. Toàn bộ mã nguồn ứng dụng (Application Source Code):
+    - Thư mục `src/`: Toàn bộ mã nguồn Frontend React 19 + TypeScript + Vanilla CSS.
+      * `src/components/`: Các components UI (ReaderModal, Layout, Theme, Wallet...).
+      * `src/pages/`: Trang Discover, BookDetail, AuthorStudio, AdminDashboard, Verify...
+      * `src/context/`: AuthContext, I18nContext, ThemeContext, WalletContext.
+      * `src/i18n/`: Tệp từ điển song ngữ hoàn chỉnh `vi.ts` và `en.ts`.
+      * `src/index.css`: Toàn bộ hệ thống Design Tokens và utility classes.
+    - Thư mục `server/`: Toàn bộ mã nguồn Backend API Express 5 + TypeScript.
+      * `server/app.ts`, `server/index.ts`: Khởi tạo ứng dụng và kết nối pool CSDL.
+      * `server/config/`: Quản lý cấu hình `env.ts`.
+      * `server/controllers/`, `server/routes/`: Bộ điều khiển và định tuyến API.
+      * `server/services/`: Nghiệp vụ sách, bản quyền, xác thực, lưu trữ tệp.
+      * `server/repositories/`: Tầng truy cập dữ liệu SQL Server.
+      * `server/middlewares/`: Xác thực token JWT, kiểm tra RBAC, upload file, xử lý lỗi.
+      * `server/blockchain/`: Lớp tương tác JSON-RPC ethers.js `contractClient.ts`.
+      * `server/types/`: Toàn bộ định nghĩa interface DTO & Domain Model.
+
+[x] 2.2. Mã nguồn Hợp đồng thông minh & Kịch bản Web3 (Smart Contracts & Scripts):
+    - `contracts/BookCopyrightRegistry.sol`: Smart Contract Solidity 0.8.28.
+    - `hardhat.config.cjs`: Cấu hình mạng Hardhat Local và Sepolia.
+    - `scripts/deploy.cjs`: Kịch bản triển khai contract tự động cập nhật metadata.
+    - `scripts/exportArtifacts.cjs`: Kịch bản trích xuất ABI sang client & server.
+    - `scripts/grantRole.cjs`: Kịch bản quản trị cấp vai trò REGISTRAR_ROLE.
+    - `scripts/interact.cjs`: Kịch bản thử nghiệm tương tác dòng lệnh.
+
+[x] 2.3. Cơ sở dữ liệu, Migrations & Scripts quản trị (Database & Seed Scripts):
+    - `BookChainLibrary_SQLServer.sql`: Script DDL tạo CSDL, 15 bảng cơ sở và 3 roles.
+    - `server/db/migrations/001_create_invitations.sql`: Migration tạo 2 bảng mã mời.
+    - `server/db/runMigration.ts`: Trình chạy migration tự động qua TypeScript.
+    - `server/db/seedBooks.ts`: Script nạp 3 cuốn sách số mẫu kèm PDF và SHA-256 thật.
+    - `server/scripts/bootstrapAdmin.ts`: Script CLI bootstrap tài khoản ADMIN an toàn.
+
+[x] 2.4. Tệp quản lý phụ thuộc và cấu hình dự án (Project Config & Lockfiles):
+    - `package.json`: Khai báo toàn bộ scripts và dependencies.
+    - `package-lock.json`: Khóa chính xác phiên bản của 648 packages (đảm bảo tính nhất quán 100%).
+    - `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`, `server/tsconfig.json`.
+    - `vite.config.ts`, `vitest.config.ts`, `.oxlintrc.json`.
+    - `.gitignore`: Danh mục loại trừ tệp an toàn.
+    - `.env.example`: Tệp mẫu biến môi trường với đầy đủ placeholders và chú thích.
+
+[x] 2.5. Toàn bộ Bộ kiểm thử (Automated Test Suites):
+    - `test/contracts/BookCopyrightRegistry.test.cjs`: 29 Unit Tests hợp đồng thông minh.
+    - `tests/api.test.ts`: Test xác thực, session và RBAC.
+    - `tests/step02_books.test.ts`: Test nghiệp vụ tác phẩm và upload tệp.
+    - `tests/step02_1_invitations.test.ts`: Test mã mời tác giả và concurrency.
+    - `tests/step03_blockchain_utils.test.ts`: Test mật mã bytes32 / sha256 / uuid.
+    - `tests/step03_1_wallet.test.ts`: Test quản lý liên kết ví.
+    - `tests/step04_copyright_integration.test.ts`: Test đăng ký bản quyền blockchain.
+    - `tests/step05_dispute_management.test.ts`: Test khiếu nại, tranh chấp & circuit breaker.
+    - `tests/step06_storage_reconciliation.test.ts`: Test đối soát giao dịch và storage.
+    - `tests/step07_author_approval.test.ts`: Test quy trình duyệt bút danh tác giả.
+
+[x] 2.6. Toàn bộ Tài liệu Hướng dẫn & Báo cáo kỹ thuật (Documentation):
+    - `SETUP_GUIDE.txt`: Hướng dẫn cài đặt và vận hành 12 bước chi tiết.
+    - `HANDOFF_CHECKLIST.txt`: Danh mục kiểm tra bàn giao (tệp này).
+    - `HANDOFF_READINESS_REPORT.txt`: Báo cáo kết quả kiểm chứng tính sẵn sàng.
+    - `PROJECT_NOTES.txt`: Sổ tay kiến trúc và lịch sử kỹ thuật toàn diện.
+    - `README.md`, `PRODUCT.md`, `DESIGN.md`.
+
+================================================================================
+3. CÁC ARTIFACT BLOCKCHAIN BẮT BUỘC CẦN GIỮ LẠI (CRITICAL ARTIFACTS)
+================================================================================
+Mặc dù thư mục `artifacts/` và `cache/` của Hardhat có thể tái tạo bằng lệnh biên dịch,
+các tệp metadata sau ĐÃ ĐƯỢC XUẤT SANG MÃ NGUỒN và BẮT BUỘC PHẢI GIỮ LẠI trong gói
+bàn giao để đảm bảo TypeScript Type-Checking (`npm run build`) và khởi động server
+thành công ngay cả khi chưa kết nối mạng blockchain:
+
+[x] 3.1. Thư mục `deployments/`:
+    - `deployments/localhost.json`: Chứa bản ghi triển khai trên node Hardhat cục bộ.
+    - `deployments/hardhat.json`: Bản ghi triển khai trên mạng in-memory Hardhat.
+
+[x] 3.2. Metadata ABI tại Client (`src/contracts/`):
+    - `src/contracts/BookCopyrightRegistry.json`: ABI và bytecode đầy đủ.
+    - `src/contracts/BookCopyrightRegistry.ts`: Module TypeScript export `BookCopyrightRegistryAbi` dạng const tuple.
+    - `src/contracts/deployedAddresses.json`: Địa chỉ contract đã triển khai trên các mạng.
+
+[x] 3.3. Metadata ABI tại Server (`server/contracts/`):
+    - `server/contracts/BookCopyrightRegistry.json`: Bản sao ABI cho backend.
+    - `server/contracts/BookCopyrightRegistry.ts`: Module TypeScript export ABI cho Node.js ESM.
+    - `server/contracts/deployedAddresses.json`: Địa chỉ contract cho `contractClient.ts`.
+
+================================================================================
+4. NHỮNG GÌ TUYỆT ĐỐI KHÔNG GỬI / PHẢI LOẠI BỎ (CRITICAL EXCLUSIONS)
+================================================================================
+Người thực hiện bàn giao PHẢI KIỂM TRA KỸ và LOẠI BỎ các mục sau trước khi nén tệp:
+
+[!] 4.1. File cấu hình môi trường chứa Secret thật:
+    - LOẠI BỎ: `.env`, `.env.local`, `.env.production` (Chỉ gửi `.env.example`).
+    - Lý do: Chứa mật khẩu tài khoản `sa` SQL Server của máy người bàn giao, khóa bí mật
+      ký JWT token phiên làm việc, hoặc RPC key.
+
+[!] 4.2. Khóa riêng tư (Private Keys) và Ví cá nhân:
+    - LOẠI BỎ: Bất kỳ file nào lưu trữ Private Key của ví cá nhân có chứa tài sản thật
+      trên Ethereum Mainnet hoặc testnet.
+    - Ngoại lệ an toàn: Các Private Key của Hardhat Account #0 đến #19 (ví dụ khóa
+      `0xac09...f2ff80`) là tài khoản thử nghiệm công khai nổi tiếng trong cộng đồng
+      Ethereum/Hardhat, hoàn toàn không có giá trị thương mại và an toàn để ghi chú.
+
+[!] 4.3. Các thư mục có thể tái tạo (Reproducible Directories - Giảm tải dung lượng):
+    - LOẠI BỎ: `node_modules/` (~300MB - Người nhận chỉ cần chạy `npm install`).
+    - LOẠI BỎ: `dist/`, `dist-ssr/` (Tái tạo bằng `npm run build`).
+    - LOẠI BỎ: `cache/` (Tự sinh khi chạy `npm run contracts:compile`).
+    - LOẠI BỎ: `artifacts/` (Tự sinh khi biên dịch hợp đồng thông minh).
+
+[!] 4.4. Dữ liệu tệp tải lên và tệp tạm thời (Storage & Temp files):
+    - LOẠI BỎ: Các tệp sách riêng tư do người dùng tự tải lên trong `storage/books/*`
+      (Chỉ giữ lại tệp `.gitkeep` để duy trì thư mục rỗng).
+    - LOẠI BỎ: Thư mục đệm IPFS cục bộ `storage/ipfs/*`.
+    - LOẠI BỎ: Thư mục `.gemini/`, `scratch/`, `impeccable/` nếu có.
+
+[!] 4.5. Tệp cấu hình IDE và Nhật ký hệ thống (Logs & OS Files):
+    - LOẠI BỎ: `*.log`, `npm-debug.log*`, `yarn-error.log*`, `logs/`.
+    - LOẠI BỎ: Thư mục cấu hình cá nhân `.vscode/` (ngoại trừ `.vscode/extensions.json`), `.idea/`.
+    - LOẠI BỎ: Tệp rác của hệ điều hành: `.DS_Store` (macOS), `Thumbs.db`, `desktop.ini` (Windows).
+
+[!] 4.6. Bản sao lưu CSDL chứa dữ liệu thật:
+    - LOẠI BỎ: Các file sao lưu SQL Server (`*.bak`) có chứa thông tin khách hàng hoặc tài khoản cá nhân.
+      (Người nhận sẽ khởi tạo database sạch từ script DDL `BookChainLibrary_SQLServer.sql`).
+
+================================================================================
+5. HƯỚNG DẪN TẠO GÓI BÀN GIAO SẠCH (CLEAN EXPORT / ZIP GUIDE)
+================================================================================
+
+5.1. Tạo bản sao lưu sạch bằng Git Archive (Nếu đang dùng Git):
+  - Lệnh này sẽ tự động bỏ qua toàn bộ tệp nằm trong `.gitignore` (bao gồm `node_modules`, `.env`, `artifacts`, `cache`, `dist`):
+      git archive --format=zip --output=BookChainLibrary_Handoff_v1.0.zip HEAD
+
+5.2. Tạo gói nén thủ công trên Windows PowerShell:
+  - Nếu cần tạo thủ công từ thư mục làm việc, hãy tạo một thư mục tạm `BookChain_Clean`,
+    sao chép các tệp hợp lệ và nén lại:
+    ```powershell
+    # 1. Tạo thư mục tạm
+    New-Item -ItemType Directory -Path "..\BookChain_Handoff_Staging" -Force
+
+    # 2. Sao chép cây thư mục bỏ qua các thư mục rác
+    robocopy . "..\BookChain_Handoff_Staging" /E `
+      /XD node_modules dist cache artifacts .git .gemini scratch storage\books storage\ipfs `
+      /XF .env *.log
+
+    # 3. Tạo lại thư mục storage trống kèm .gitkeep
+    New-Item -ItemType Directory -Path "..\BookChain_Handoff_Staging\storage\books" -Force
+    New-Item -ItemType File -Path "..\BookChain_Handoff_Staging\storage\books\.gitkeep" -Force
+
+    # 4. Đóng gói ZIP
+    Compress-Archive -Path "..\BookChain_Handoff_Staging\*" `
+      -DestinationPath "..\BookChainLibrary_Handoff_v1.0.zip" -Force
+    ```
+
+5.3. Bảng kiểm tra xác nhận trước khi gửi (Sender Pre-Flight Checklist):
+  [ ] File `.env` thật đã được loại bỏ; file `.env.example` đã có mặt.
+  [ ] Thư mục `node_modules/` đã được loại bỏ.
+  [ ] Thư mục `dist/` và `artifacts/` đã được loại bỏ.
+  [ ] File `deployments/localhost.json` đã có mặt.
+  [ ] File `src/contracts/deployedAddresses.json` đã có mặt.
+  [ ] File `server/contracts/deployedAddresses.json` đã có mặt.
+  [ ] File `SETUP_GUIDE.txt` đã có mặt ở thư mục gốc.
+  [ ] Dung lượng tệp nén `.zip` dưới 15MB (nếu vượt quá 50MB, chắc chắn bạn đã quên bỏ `node_modules`).
+
+================================================================================
+KẾT LUẬN
+================================================================================
+Thực hiện nghiêm túc danh mục kiểm tra này đảm bảo việc bàn giao source code
+cho thành viên mới diễn ra trôi chảy, chuyên nghiệp và tuân thủ các quy chuẩn
+bảo mật thông tin cao nhất.
+================================================================================

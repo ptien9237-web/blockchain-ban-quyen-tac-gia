@@ -1,0 +1,935 @@
+{
+  "contractName": "BookCopyrightRegistry",
+  "sourceName": "contracts/BookCopyrightRegistry.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "defaultAdmin",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "AccessControlBadConfirmation",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "neededRole",
+          "type": "bytes32"
+        }
+      ],
+      "name": "AccessControlUnauthorizedAccount",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "EmptyReasonRequired",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "EnforcedPause",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ExpectedPause",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "contentHash",
+          "type": "bytes32"
+        }
+      ],
+      "name": "HashAlreadyRegistered",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "contentHash",
+          "type": "bytes32"
+        }
+      ],
+      "name": "HashNotRegistered",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidBookId",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidContentHash",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidRecordId",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "enum BookCopyrightRegistry.RecordStatus",
+          "name": "currentStatus",
+          "type": "uint8"
+        },
+        {
+          "internalType": "enum BookCopyrightRegistry.RecordStatus",
+          "name": "targetStatus",
+          "type": "uint8"
+        }
+      ],
+      "name": "InvalidStatusTransition",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidVersionNumber",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "recordId",
+          "type": "bytes32"
+        }
+      ],
+      "name": "RecordAlreadyExists",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "recordId",
+          "type": "bytes32"
+        }
+      ],
+      "name": "RecordAlreadyRevoked",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "recordId",
+          "type": "bytes32"
+        }
+      ],
+      "name": "RecordNotFound",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "bookId",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "versionNumber",
+          "type": "uint32"
+        }
+      ],
+      "name": "VersionAlreadyRegistered",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "recordId",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "bookId",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "uint32",
+          "name": "versionNumber",
+          "type": "uint32"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes32",
+          "name": "contentHash",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "authorWallet",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "registrant",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint64",
+          "name": "registeredAt",
+          "type": "uint64"
+        },
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "metadataUri",
+          "type": "string"
+        }
+      ],
+      "name": "CopyrightRegistered",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "recordId",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "enum BookCopyrightRegistry.RecordStatus",
+          "name": "previousStatus",
+          "type": "uint8"
+        },
+        {
+          "indexed": false,
+          "internalType": "enum BookCopyrightRegistry.RecordStatus",
+          "name": "newStatus",
+          "type": "uint8"
+        },
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "reason",
+          "type": "string"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "updatedBy",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint64",
+          "name": "timestamp",
+          "type": "uint64"
+        }
+      ],
+      "name": "CopyrightStatusUpdated",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "Paused",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "previousAdminRole",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "newAdminRole",
+          "type": "bytes32"
+        }
+      ],
+      "name": "RoleAdminChanged",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "sender",
+          "type": "address"
+        }
+      ],
+      "name": "RoleGranted",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "sender",
+          "type": "address"
+        }
+      ],
+      "name": "RoleRevoked",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "Unpaused",
+      "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "DEFAULT_ADMIN_ROLE",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "REGISTRAR_ROLE",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "recordId",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "string",
+          "name": "reason",
+          "type": "string"
+        }
+      ],
+      "name": "disputeCopyright",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "bookId",
+          "type": "bytes32"
+        }
+      ],
+      "name": "getBookVersionCount",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "bookId",
+          "type": "bytes32"
+        }
+      ],
+      "name": "getBookVersions",
+      "outputs": [
+        {
+          "internalType": "uint32[]",
+          "name": "",
+          "type": "uint32[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "recordId",
+          "type": "bytes32"
+        }
+      ],
+      "name": "getCopyright",
+      "outputs": [
+        {
+          "components": [
+            {
+              "internalType": "bytes32",
+              "name": "recordId",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "bytes32",
+              "name": "bookId",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "uint32",
+              "name": "versionNumber",
+              "type": "uint32"
+            },
+            {
+              "internalType": "bytes32",
+              "name": "contentHash",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "address",
+              "name": "authorWallet",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "registrant",
+              "type": "address"
+            },
+            {
+              "internalType": "uint64",
+              "name": "registeredAt",
+              "type": "uint64"
+            },
+            {
+              "internalType": "enum BookCopyrightRegistry.RecordStatus",
+              "name": "status",
+              "type": "uint8"
+            },
+            {
+              "internalType": "string",
+              "name": "metadataUri",
+              "type": "string"
+            }
+          ],
+          "internalType": "struct BookCopyrightRegistry.CopyrightRecord",
+          "name": "",
+          "type": "tuple"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "contentHash",
+          "type": "bytes32"
+        }
+      ],
+      "name": "getCopyrightByHash",
+      "outputs": [
+        {
+          "components": [
+            {
+              "internalType": "bytes32",
+              "name": "recordId",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "bytes32",
+              "name": "bookId",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "uint32",
+              "name": "versionNumber",
+              "type": "uint32"
+            },
+            {
+              "internalType": "bytes32",
+              "name": "contentHash",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "address",
+              "name": "authorWallet",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "registrant",
+              "type": "address"
+            },
+            {
+              "internalType": "uint64",
+              "name": "registeredAt",
+              "type": "uint64"
+            },
+            {
+              "internalType": "enum BookCopyrightRegistry.RecordStatus",
+              "name": "status",
+              "type": "uint8"
+            },
+            {
+              "internalType": "string",
+              "name": "metadataUri",
+              "type": "string"
+            }
+          ],
+          "internalType": "struct BookCopyrightRegistry.CopyrightRecord",
+          "name": "",
+          "type": "tuple"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "bookId",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "versionNumber",
+          "type": "uint32"
+        }
+      ],
+      "name": "getRecordByBookVersion",
+      "outputs": [
+        {
+          "components": [
+            {
+              "internalType": "bytes32",
+              "name": "recordId",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "bytes32",
+              "name": "bookId",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "uint32",
+              "name": "versionNumber",
+              "type": "uint32"
+            },
+            {
+              "internalType": "bytes32",
+              "name": "contentHash",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "address",
+              "name": "authorWallet",
+              "type": "address"
+            },
+            {
+              "internalType": "address",
+              "name": "registrant",
+              "type": "address"
+            },
+            {
+              "internalType": "uint64",
+              "name": "registeredAt",
+              "type": "uint64"
+            },
+            {
+              "internalType": "enum BookCopyrightRegistry.RecordStatus",
+              "name": "status",
+              "type": "uint8"
+            },
+            {
+              "internalType": "string",
+              "name": "metadataUri",
+              "type": "string"
+            }
+          ],
+          "internalType": "struct BookCopyrightRegistry.CopyrightRecord",
+          "name": "",
+          "type": "tuple"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        }
+      ],
+      "name": "getRoleAdmin",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "grantRole",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "hasRole",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "pause",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "paused",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "recordId",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "bookId",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "versionNumber",
+          "type": "uint32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "contentHash",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "address",
+          "name": "authorWallet",
+          "type": "address"
+        },
+        {
+          "internalType": "string",
+          "name": "metadataUri",
+          "type": "string"
+        }
+      ],
+      "name": "registerCopyright",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "address",
+          "name": "callerConfirmation",
+          "type": "address"
+        }
+      ],
+      "name": "renounceRole",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "recordId",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "enum BookCopyrightRegistry.RecordStatus",
+          "name": "newStatus",
+          "type": "uint8"
+        },
+        {
+          "internalType": "string",
+          "name": "reason",
+          "type": "string"
+        }
+      ],
+      "name": "resolveDispute",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "recordId",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "string",
+          "name": "reason",
+          "type": "string"
+        }
+      ],
+      "name": "revokeCopyright",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "revokeRole",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes4",
+          "name": "interfaceId",
+          "type": "bytes4"
+        }
+      ],
+      "name": "supportsInterface",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "totalRecords",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "unpause",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "contentHash",
+          "type": "bytes32"
+        }
+      ],
+      "name": "verifyHash",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "exists",
+          "type": "bool"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "recordId",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "bookId",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint32",
+          "name": "versionNumber",
+          "type": "uint32"
+        },
+        {
+          "internalType": "address",
+          "name": "authorWallet",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "registrant",
+          "type": "address"
+        },
+        {
+          "internalType": "uint64",
+          "name": "registeredAt",
+          "type": "uint64"
+        },
+        {
+          "internalType": "enum BookCopyrightRegistry.RecordStatus",
+          "name": "status",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x608060405234801561001057600080fd5b50604051611e0b380380611e0b83398101604081905261002f9161017e565b6001600160a01b0381166100955760405162461bcd60e51b8152602060048201526024808201527f44656661756c742061646d696e2063616e6e6f74206265207a65726f206164646044820152637265737360e01b606482015260840160405180910390fd5b6100a06000826100d2565b506100cb7fedcc084d3dcd65a1f7f23c65c46722faca6953d28e43150a467cf43e5c309238826100d2565b50506101ae565b6000828152602081815260408083206001600160a01b038516845290915281205460ff16610174576000838152602081815260408083206001600160a01b03861684529091529020805460ff1916600117905561012c3390565b6001600160a01b0316826001600160a01b0316847f2f8788117e7eff1d82e926ec794901d17c78024a50270940304540a733656f0d60405160405180910390a4506001610178565b5060005b92915050565b60006020828403121561019057600080fd5b81516001600160a01b03811681146101a757600080fd5b9392505050565b611c4e806101bd6000396000f3fe608060405234801561001057600080fd5b50600436106101425760003560e01c80635c975abb116100b8578063a3208ddf1161007c578063a3208ddf146102a0578063b126671e146102b3578063d547741f146102c6578063d7e5417a146102d9578063ef020f4a146102ec578063f68e95531461031357600080fd5b80635c975abb146102525780635d6994971461025d5780638456cb591461027d57806391d1485414610285578063a217fddf1461029857600080fd5b806336568abe1161010a57806336568abe146101de57806337935ffc146101f1578063393ca847146102115780633f4ba83a1461022457806340769be11461022c5780634c7ebaa71461023f57600080fd5b806301ffc9a714610147578063125f89741461016f578063248a9ca3146101865780632f2197f3146101a95780632f2ff15d146101c9575b600080fd5b61015a6101553660046115a4565b61033a565b60405190151581526020015b60405180910390f35b61017860025481565b604051908152602001610166565b6101786101943660046115d5565b60009081526020819052604090206001015490565b6101bc6101b73660046115d5565b610371565b60405161016691906115ee565b6101dc6101d7366004611653565b6103ff565b005b6101dc6101ec366004611653565b61042a565b6102046101ff3660046115d5565b610462565b60405161016691906116fd565b61020461021f3660046115d5565b6105ed565b6101dc61076f565b6101dc61023a36600461180e565b610785565b6101dc61024d36600461188f565b610b4f565b60015460ff1661015a565b61017861026b3660046115d5565b60009081526006602052604090205490565b6101dc610cc6565b61015a610293366004611653565b610cd9565b610178600081565b6101dc6102ae3660046118da565b610d02565b6101dc6102c136600461188f565b610e9c565b6101dc6102d4366004611653565b610fb4565b6102046102e7366004611939565b610fd9565b6102ff6102fa3660046115d5565b611171565b60405161016698979695949392919061195c565b6101787fedcc084d3dcd65a1f7f23c65c46722faca6953d28e43150a467cf43e5c30923881565b60006001600160e01b03198216637965db0b60e01b148061036b57506301ffc9a760e01b6001600160e01b03198316145b92915050565b6000818152600660209081526040918290208054835181840281018401909452808452606093928301828280156103f357602002820191906000526020600020906000905b82829054906101000a900463ffffffff1663ffffffff16815260200190600401906020826003010492830192600103820291508084116103b65790505b50505050509050919050565b60008281526020819052604090206001015461041a8161133e565b6104248383611348565b50505050565b6001600160a01b03811633146104535760405163334bd91960e11b815260040160405180910390fd5b61045d82826113da565b505050565b61046a611558565b6000828152600460205260409020548061049f57604051633a3fd3ef60e11b8152600481018490526024015b60405180910390fd5b6000818152600360208181526040928390208351610120810185528154815260018201549281019290925260028082015463ffffffff169483019490945291820154606082015260048201546001600160a01b039081166080830152600583015490811660a0830152600160a01b81046001600160401b031660c0830152909260e0840191600160e01b900460ff169081111561053e5761053e61167f565b600281111561054f5761054f61167f565b8152602001600682018054610563906119c0565b80601f016020809104026020016040519081016040528092919081815260200182805461058f906119c0565b80156105dc5780601f106105b1576101008083540402835291602001916105dc565b820191906000526020600020905b8154815290600101906020018083116105bf57829003601f168201915b505050505081525050915050919050565b6105f5611558565b60008281526003602081815260408084208151610120810183528154815260018201549381019390935260028082015463ffffffff169284019290925292830154606083015260048301546001600160a01b039081166080840152600584015490811660a0840152600160a01b81046001600160401b031660c084015291929160e0840191600160e01b90910460ff16908111156106955761069561167f565b60028111156106a6576106a661167f565b81526020016006820180546106ba906119c0565b80601f01602080910402602001604051908101604052809291908181526020018280546106e6906119c0565b80156107335780601f1061070857610100808354040283529160200191610733565b820191906000526020600020905b81548152906001019060200180831161071657829003601f168201915b50505050508152505090508060c001516001600160401b031660000361036b576040516333853f3560e11b815260048101849052602401610496565b600061077a8161133e565b610782611445565b50565b7fedcc084d3dcd65a1f7f23c65c46722faca6953d28e43150a467cf43e5c3092386107af8161133e565b6107b7611497565b876107d5576040516376e8a99b60e01b815260040160405180910390fd5b866107f357604051631ecbbbb960e31b815260040160405180910390fd5b8563ffffffff1660000361081a5760405163ad92452760e01b815260040160405180910390fd5b84610838576040516368e1d61b60e01b815260040160405180910390fd5b600088815260036020526040902060050154600160a01b90046001600160401b03161561087b576040516309a2223360e21b815260048101899052602401610496565b600085815260046020526040902054156108ab576040516365fe531760e01b815260048101869052602401610496565b600087815260056020908152604080832063ffffffff8a168452909152902054156108f85760405163164de9f360e01b81526004810188905263ffffffff87166024820152604401610496565b604080516101208101825289815260208082018a905263ffffffff891682840152606082018890526001600160a01b03871660808301523360a0830152426001600160401b03811660c0840152600060e08401528351601f870183900483028101830190945285845292610100830191879087908190840183828082843760009201829052509390945250508b81526003602081815260409283902085518155908501516001820155918401516002808401805463ffffffff191663ffffffff9093169290921790915560608501519183019190915560808401516004830180546001600160a01b0319166001600160a01b0392831617905560a085015160058401805460c0880151929093166001600160e01b031990931692909217600160a01b6001600160401b03909216919091021780825560e0860151939450909160ff60e01b1990911690600160e01b908490811115610a5857610a5861167f565b02179055506101008201516006820190610a729082611a5e565b50505060008681526004602081815260408084208d90558b84526005825280842063ffffffff8c81168087529184528286208f90558d8652600684529185208054600180820183559187529386206008850401805460079095169095026101000a928302199093169102179091556002805491929091610af3908490611b1c565b925050819055508663ffffffff16888a7fa86dc5d25d395dc5056487b7f8e8d38f3a27243f93be4320148983f29302c2d0898933878b8b604051610b3c96959493929190611b66565b60405180910390a4505050505050505050565b6000610b5a8161133e565b6000829003610b7c576040516337f5160f60e11b815260040160405180910390fd5b600084815260036020526040812060058101549091600160a01b9091046001600160401b03169003610bc4576040516333853f3560e11b815260048101869052602401610496565b60026005820154600160e01b900460ff166002811115610be657610be661167f565b03610c0757604051634928184160e01b815260048101869052602401610496565b60016005820154600160e01b900460ff166002811115610c2957610c2961167f565b03610c5a57600581015460405163e3962ba360e01b815261049691600160e01b900460ff1690600190600401611bb4565b600581018054600160e01b60ff60e01b198216811790925560405191900460ff1690339087907f20e58d07dce157bc611b266583473f6fefb270075594af780759ac9df55390c090610cb69085906001908b908b904290611bcf565b60405180910390a3505050505050565b6000610cd18161133e565b6107826114bd565b6000918252602082815260408084206001600160a01b0393909316845291905290205460ff1690565b6000610d0d8161133e565b6000829003610d2f576040516337f5160f60e11b815260040160405180910390fd5b600085815260036020526040812060058101549091600160a01b9091046001600160401b03169003610d77576040516333853f3560e11b815260048101879052602401610496565b60016005820154600160e01b900460ff166002811115610d9957610d9961167f565b14610dc957600581015460405163e3962ba360e01b815261049691600160e01b900460ff16908790600401611bb4565b6000856002811115610ddd57610ddd61167f565b14158015610dfd57506002856002811115610dfa57610dfa61167f565b14155b15610e2d57600581015460405163e3962ba360e01b815261049691600160e01b900460ff16908790600401611bb4565b60058101805486919060ff60e01b1916600160e01b836002811115610e5457610e5461167f565b0217905550336001600160a01b0316867f20e58d07dce157bc611b266583473f6fefb270075594af780759ac9df55390c0600188888842604051610cb6959493929190611bcf565b6000610ea78161133e565b6000829003610ec9576040516337f5160f60e11b815260040160405180910390fd5b600084815260036020526040812060058101549091600160a01b9091046001600160401b03169003610f11576040516333853f3560e11b815260048101869052602401610496565b60026005820154600160e01b900460ff166002811115610f3357610f3361167f565b03610f5457604051634928184160e01b815260048101869052602401610496565b60058101805460ff60e01b198116600160e11b17909155604051600160e01b90910460ff1690339087907f20e58d07dce157bc611b266583473f6fefb270075594af780759ac9df55390c090610cb69085906002908b908b904290611bcf565b600082815260208190526040902060010154610fcf8161133e565b61042483836113da565b610fe1611558565b600083815260056020908152604080832063ffffffff8616845290915290205480611022576040516333853f3560e11b815260006004820152602401610496565b6000818152600360208181526040928390208351610120810185528154815260018201549281019290925260028082015463ffffffff169483019490945291820154606082015260048201546001600160a01b039081166080830152600583015490811660a0830152600160a01b81046001600160401b031660c0830152909260e0840191600160e01b900460ff16908111156110c1576110c161167f565b60028111156110d2576110d261167f565b81526020016006820180546110e6906119c0565b80601f0160208091040260200160405190810160405280929190818152602001828054611112906119c0565b801561115f5780601f106111345761010080835404028352916020019161115f565b820191906000526020600020905b81548152906001019060200180831161114257829003601f168201915b50505050508152505091505092915050565b6000818152600460205260408120548190819081908190819081908190806111b2575060009750879650869550859450849350839250829150819050611333565b60008181526003602081815260408084208151610120810183528154815260018201549381019390935260028082015463ffffffff169284019290925292830154606083015260048301546001600160a01b039081166080840152600584015490811660a0840152600160a01b81046001600160401b031660c084015291929160e0840191600160e01b90910460ff16908111156112525761125261167f565b60028111156112635761126361167f565b8152602001600682018054611277906119c0565b80601f01602080910402602001604051908101604052809291908181526020018280546112a3906119c0565b80156112f05780601f106112c5576101008083540402835291602001916112f0565b820191906000526020600020905b8154815290600101906020018083116112d357829003601f168201915b5050505050815250509050600181600001518260200151836040015184608001518560a001518660c001518760e001519950995099509950995099509950995050505b919395975091939597565b61078281336114f8565b60006113548383610cd9565b6113d2576000838152602081815260408083206001600160a01b03861684529091529020805460ff1916600117905561138a3390565b6001600160a01b0316826001600160a01b0316847f2f8788117e7eff1d82e926ec794901d17c78024a50270940304540a733656f0d60405160405180910390a450600161036b565b50600061036b565b60006113e68383610cd9565b156113d2576000838152602081815260408083206001600160a01b0386168085529252808320805460ff1916905551339286917ff6391f5c32d9c69d2a47ea670b442974b53935d1edc7fd64eb21e047a839171b9190a450600161036b565b61144d611535565b6001805460ff191690557f5db9ee0a495bf2e6ff9c91a7834c1ba4fdd244a5e8aa4e537bd38aeae4b073aa335b6040516001600160a01b03909116815260200160405180910390a1565b60015460ff16156114bb5760405163d93c066560e01b815260040160405180910390fd5b565b6114c5611497565b6001805460ff1916811790557f62e78cea01bee320cd4e420270b5ea74000d11b0c9f74754ebdbfc544b05a2583361147a565b6115028282610cd9565b6115315760405163e2517d3f60e01b81526001600160a01b038216600482015260248101839052604401610496565b5050565b60015460ff166114bb57604051638dfc202b60e01b815260040160405180910390fd5b6040805161012081018252600080825260208201819052918101829052606081018290526080810182905260a0810182905260c081018290529060e08201908152602001606081525090565b6000602082840312156115b657600080fd5b81356001600160e01b0319811681146115ce57600080fd5b9392505050565b6000602082840312156115e757600080fd5b5035919050565b602080825282518282018190526000918401906040840190835b8181101561162c57835163ffffffff16835260209384019390920191600101611608565b509095945050505050565b80356001600160a01b038116811461164e57600080fd5b919050565b6000806040838503121561166657600080fd5b8235915061167660208401611637565b90509250929050565b634e487b7160e01b600052602160045260246000fd5b600381106116b357634e487b7160e01b600052602160045260246000fd5b9052565b6000815180845260005b818110156116dd576020818501810151868301820152016116c1565b506000602082860101526020601f19601f83011685010191505092915050565b6020815281516020820152602082015160408201526000604083015161172b606084018263ffffffff169052565b5060608301516080830152608083015161175060a08401826001600160a01b03169052565b5060a08301516001600160a01b03811660c08401525060c08301516001600160401b03811660e08401525060e083015161178e610100840182611695565b50610100830151610120808401526117aa6101408401826116b7565b949350505050565b803563ffffffff8116811461164e57600080fd5b60008083601f8401126117d857600080fd5b5081356001600160401b038111156117ef57600080fd5b60208301915083602082850101111561180757600080fd5b9250929050565b600080600080600080600060c0888a03121561182957600080fd5b8735965060208801359550611840604089016117b2565b94506060880135935061185560808901611637565b925060a08801356001600160401b0381111561187057600080fd5b61187c8a828b016117c6565b989b979a50959850939692959293505050565b6000806000604084860312156118a457600080fd5b8335925060208401356001600160401b038111156118c157600080fd5b6118cd868287016117c6565b9497909650939450505050565b600080600080606085870312156118f057600080fd5b8435935060208501356003811061190657600080fd5b925060408501356001600160401b0381111561192157600080fd5b61192d878288016117c6565b95989497509550505050565b6000806040838503121561194c57600080fd5b82359150611676602084016117b2565b8815158152602081018890526040810187905263ffffffff861660608201526001600160a01b038581166080830152841660a08201526001600160401b03831660c082015261010081016119b360e0830184611695565b9998505050505050505050565b600181811c908216806119d457607f821691505b6020821081036119f457634e487b7160e01b600052602260045260246000fd5b50919050565b634e487b7160e01b600052604160045260246000fd5b601f82111561045d57806000526020600020601f840160051c81016020851015611a375750805b601f840160051c820191505b81811015611a575760008155600101611a43565b5050505050565b81516001600160401b03811115611a7757611a776119fa565b611a8b81611a8584546119c0565b84611a10565b6020601f821160018114611abf5760008315611aa75750848201515b600019600385901b1c1916600184901b178455611a57565b600084815260208120601f198516915b82811015611aef5787850151825560209485019460019092019101611acf565b5084821015611b0d5786840151600019600387901b60f8161c191681555b50505050600190811b01905550565b8082018082111561036b57634e487b7160e01b600052601160045260246000fd5b81835281816020850137506000828201602090810191909152601f909101601f19169091010190565b8681526001600160a01b038681166020830152851660408201526001600160401b038416606082015260a060808201819052600090611ba89083018486611b3d565b98975050505050505050565b60408101611bc28285611695565b6115ce6020830184611695565b611bd98187611695565b611be66020820186611695565b608060408201526000611bfd608083018587611b3d565b90506001600160401b0383166060830152969550505050505056fea2646970667358221220d0234a02f6c7bbe42d52ea41babe2c09abdb32ea52cef21ed5529353de95725164736f6c634300081c0033",
+  "exportedAt": "2026-10-14T13:45:26.575Z"
+}

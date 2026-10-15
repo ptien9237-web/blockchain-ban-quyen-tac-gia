@@ -1,0 +1,81 @@
+================================================================================
+BÁO CÁO NGHIỆM THU BƯỚC 01: HOÀN THIỆN TÀI KHOẢN VÀ NỀN TẢNG NGHIỆP VỤ
+DỰ ÁN: BOOKCHAIN LIBRARY — DIGITAL LIBRARY & BLOCKCHAIN COPYRIGHT REGISTRY
+================================================================================
+
+1. PHẠM VI ĐÃ HOÀN THÀNH
+- [PASS] Đọc và đối chiếu toàn bộ schema SQL Server (BookChainLibrary_SQLServer.sql).
+- [PASS] Thiết lập nền tảng backend Express + TypeScript với kiến trúc phân tầng chuẩn.
+- [PASS] Cấu hình kết nối an toàn đến Microsoft SQL Server 2025 (CSDL BookChainLibrary) qua biến môi trường (.env).
+- [PASS] Triển khai đăng ký tài khoản thành viên với mã hóa mật khẩu bcrypt, chống email trùng lặp, gán mặc định vai trò READER.
+- [PASS] Triển khai đăng nhập, đăng xuất với phiên lưu trong bảng dbo.Sessions, phát hành token và cookie HttpOnly.
+- [PASS] Triển khai hồ sơ người dùng cá nhân (dbo.Users) và đăng ký hồ sơ tác giả (dbo.AuthorProfiles).
+- [PASS] Thiết lập cơ chế kiểm soát truy cập dựa trên vai trò (RBAC) với 3 vai trò: READER, AUTHOR, ADMIN.
+- [PASS] Tích hợp giao diện Frontend: Trang Đăng nhập (/login), Đăng ký (/register-account), Hồ sơ (/profile), cập nhật Navbar.
+- [PASS] Duy trì 100% phong cách thẩm mỹ "Archival Reading Room", khả năng responsive, chế độ Sáng/Tối và hệ thống song ngữ Anh/Việt.
+- [PASS] Xóa bỏ hoàn toàn việc sử dụng mock authentication hay localStorage làm cơ chế xác thực chính thức.
+- [PASS] Chạy và vượt qua 100% bộ kiểm thử tự động API (Vitest + Supertest), linter (Oxlint), và build (Vite + TypeScript).
+- [PASS] Cập nhật đầy đủ bộ tài liệu nghiệm thu: PROJECT_NOTES.txt, AI_LOG.md, STEP_01_REPORT.txt.
+
+2. CÁC CHỨC NĂNG HOẠT ĐỘNG THỰC TẾ
+- Endpoint kiểm tra sức khỏe (/api/health) kiểm tra kết nối CSDL SQL Server và thời gian phản hồi.
+- API đăng ký (/api/auth/register) xác thực dữ liệu đầu vào, băm mật khẩu bằng bcrypt, ghi nhận vào dbo.Users và dbo.UserRoles.
+- API đăng nhập (/api/auth/login) kiểm tra mật khẩu đã băm, tạo phiên trong dbo.Sessions, cấp cookie HttpOnly.
+- API đăng xuất (/api/auth/logout) thu hồi phiên trong dbo.Sessions và xóa cookie.
+- API lấy thông tin cá nhân (/api/auth/me, /api/users/profile) được bảo vệ bằng middleware kiểm tra phiên thật.
+- API cập nhật thông tin (/api/users/profile) cho phép đổi tên hiển thị và avatar, không cho phép đổi email/role.
+- API đăng ký tác giả (/api/users/author-profile) tạo bản ghi trong dbo.AuthorProfiles và tự động cấp vai trò AUTHOR.
+- Middleware RBAC (requireRole) chặn thành công người dùng thường truy cập tài nguyên của AUTHOR hoặc ADMIN.
+- Giao diện web kết nối trực tiếp với backend qua proxy Vite, hỗ trợ đầy đủ tiếng Anh và tiếng Việt.
+
+3. TRẠNG THÁI KẾT NỐI DATABASE
+- Trạng thái: PASS (ĐÃ KẾT NỐI THẬT).
+- Máy chủ CSDL: Microsoft SQL Server 2025 (RTM) - 17.0.1000.7 (X64) tại localhost.
+- Tên CSDL: BookChainLibrary.
+- Người dùng ứng dụng: bookchain_dev (được phân quyền db_datareader, db_datawriter).
+- Độ trễ kết nối trung bình: ~300ms - 500ms qua connection pool.
+- Bằng chứng dữ liệu: Đã kiểm tra trực tiếp qua lệnh SQL Server, các bảng Users, Roles, UserRoles, Sessions và AuthorProfiles đều đã lưu trữ bản ghi thực tế từ quá trình chạy thử.
+
+4. KẾT QUẢ KIỂM THỬ VÀ BUILD
+- Oxlint (npm run lint): PASS (0 lỗi trên 57 tệp).
+- TypeScript Compiler & Vite Build (npm run build): PASS (0 lỗi biên dịch, hoàn tất đóng gói dist/).
+- Vitest Integration Suite (npm run test): PASS (13/13 tests đạt yêu cầu).
+- Browser E2E Testing (Browser Subagent): PASS (Hoàn thành luồng đăng ký, cập nhật hồ sơ, đổi theme, đổi ngôn ngữ).
+
+5. BẢNG ĐÁNH GIÁ TIÊU CHÍ HOÀN THÀNH BƯỚC 01
+[PASS]    1. Đã đọc và đối chiếu script SQL Server với code.
+[PASS]    2. Backend có cấu trúc rõ ràng, phù hợp với project hiện tại.
+[PASS]    3. Có cấu hình kết nối SQL Server an toàn qua biến môi trường.
+[PASS]    4. Đăng ký tài khoản được xử lý bởi backend.
+[PASS]    5. Mật khẩu được băm (bcrypt) và không bị trả về client.
+[PASS]    6. Đăng nhập, đăng xuất và trạng thái xác thực hoạt động qua session CSDL.
+[PASS]    7. API hồ sơ cá nhân được bảo vệ bằng middleware.
+[PASS]    8. Phân quyền (RBAC) được thực thi tại backend.
+[PASS]    9. Không cho người dùng tự nâng quyền lên ADMIN.
+[PASS]    10. Giao diện hiện tại được tích hợp mà không bị phá vỡ.
+[PASS]    11. Không dùng mock authentication để giả lập chức năng thật.
+[PASS]    12. Các bài kiểm thử khả thi đã được chạy và ghi lại kết quả.
+[PASS]    13. PROJECT_NOTES.txt đã được tạo/cập nhật.
+[PASS]    14. AI_LOG.md đã được tạo/cập nhật.
+[PASS]    15. STEP_01_REPORT.txt đã được tạo/cập nhật.
+
+6. CÁC LỖI CÒN TỒN TẠI VÀ HẠN CHẾ
+- Môi trường hiện tại chưa cấu hình máy chủ gửi email thực tế, do đó tính năng gửi email xác minh và quên mật khẩu qua email được để dành cho giai đoạn mở rộng (đúng với phạm vi Bước 01).
+- Chức năng kết nối ví Web3 trên Navbar và quy trình ký bản quyền tại /copyright/register đang là giao diện mô phỏng chờ triển khai Smart Contract ở Bước 03.
+- Các module Sách (CRUD), Tải file, và Bảng điều khiển Quản trị thuộc về Bước 02 và các bước kế tiếp.
+
+7. HƯỚNG DẪN NGƯỜI DÙNG TỰ CHẠY VÀ KIỂM TRA
+Bước 1: Mở terminal tại thư mục gốc của dự án.
+Bước 2: Chạy kiểm thử tự động để kiểm tra API:
+        npm run test
+Bước 3: Chạy toàn bộ hệ thống (cả Frontend và Backend):
+        npm run dev:all
+Bước 4: Mở trình duyệt web truy cập:
+        http://localhost:5173
+Bước 5: Thao tác kiểm tra:
+        - Bấm "Register" (Đăng ký) trên Navbar để tạo tài khoản mới.
+        - Kiểm tra tự động đăng nhập và chuyển hướng đến trang Profile (/profile).
+        - Điền thông tin bút danh trong phần "Author Credentials" để đăng ký làm tác giả.
+        - Bấm nút chuyển đổi giao diện Sáng/Tối và ngôn ngữ EN/VI trên Navbar.
+        - Kiểm tra endpoint kiểm tra trạng thái CSDL tại: http://localhost:5000/api/health
+================================================================================

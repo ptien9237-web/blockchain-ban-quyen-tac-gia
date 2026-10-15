@@ -1,0 +1,80 @@
+.discover-header {
+  background-color: var(--color-surface);
+}
+
+.search-input-wrapper {
+  display: flex;
+  align-items: center;
+  background-color: var(--color-ground);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--spacing-4);
+  height: 48px;
+}
+
+.search-icon {
+  margin-right: var(--spacing-3);
+}
+
+.search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 0.875rem;
+  color: var(--color-ink);
+}
+
+.search-input::placeholder {
+  color: var(--color-ink-muted);
+}
+
+.discover-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: var(--spacing-12);
+}
+
+.filter-btn {
+  color: var(--color-ink-muted);
+  transition: color 0.2s ease;
+}
+
+.filter-btn:hover {
+  color: var(--color-ink);
+}
+
+.filter-btn.active {
+  color: var(--color-interactive);
+  font-weight: 500;
+}
+
+.custom-checkbox {
+  accent-color: var(--color-interactive);
+}
+
+.sort-select {
+  background-color: transparent;
+  outline: none;
+  cursor: pointer;
+}
+
+.book-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--spacing-6);
+}
+
+.empty-state {
+  background-color: var(--color-surface);
+  min-height: 400px;
+}
+
+@media (max-width: 768px) {
+  .discover-layout {
+    grid-template-columns: 1fr;
+  }
+  
+  .discover-sidebar {
+    display: none; /* In a real app, this would be a drawer */
+  }
+}

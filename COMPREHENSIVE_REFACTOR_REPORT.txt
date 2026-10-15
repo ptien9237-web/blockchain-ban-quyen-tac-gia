@@ -1,0 +1,190 @@
+================================================================================
+BÁO CÁO TỔNG RÀ SOÁT & TÁI CẤU TRÚC TOÀN DIỆN BOOKCHAIN LIBRARY
+(BUSINESS LOGIC, CODE ARCHITECTURE, THREE-ZONE NAVIGATION & IMPECCABLE UI/UX)
+================================================================================
+Thời gian hoàn thành: 2026-10-15
+Phiên bản: 1.0.0-Archival-Refactor
+Định hướng cốt lõi: LIBRARY FIRST, COPYRIGHT SECOND, BLOCKCHAIN UNDERNEATH
+
+--------------------------------------------------------------------------------
+I. TỔNG QUAN VÀ MỤC TIÊU ĐẠT ĐƯỢC
+--------------------------------------------------------------------------------
+Dự án BOOKCHAIN LIBRARY đã trải qua một đợt tổng rà soát toàn diện (Comprehensive Audit)
+và tái cấu trúc hệ thống (Refactoring) trên cả 4 trục:
+1. Business Logic & Permissions (Luồng nghiệp vụ & Phân quyền bảo mật).
+2. Code & Architecture (Cấu trúc mã nguồn, API Endpoints, Repositories).
+3. Three-Zone Navigation (Tổ chức điều hướng 3 khu vực: Độc giả, Tác giả, Quản trị).
+4. Impeccable Typography & UI/UX (Mỹ học phòng đọc lưu trữ Archival Reading Room).
+
+Toàn bộ 5 giai đoạn phát triển trước đó (Step 01 - Step 05), các bài test, cơ sở dữ liệu
+SQL Server hiện có và Smart Contract đã triển khai trên Hardhat Node/Sepolia được BẢO TOÀN
+NGUYÊN VẸN 100%, không phát sinh tình trạng xóa bảng, mất mát dữ liệu hay hồi quy logic.
+
+--------------------------------------------------------------------------------
+II. ĐỌC VÀ ÁP DỤNG BỘ SKILL IMPECCABLE
+--------------------------------------------------------------------------------
+- Vị trí phát hiện: Thư mục `.gemini/skills/impeccable/` (chứa các công cụ điều hành mỹ học,
+  các quy chuẩn typography, layout, token và bộ quét lỗi khuyết tật giao diện tự động).
+- Công cụ sử dụng:
+  + `.gemini/skills/impeccable/scripts/impeccable.cmd context`: Phân tích ngữ cảnh sản phẩm
+    (PRODUCT.md: Archival Reading Room & DESIGN.md: HSL token palette, Typography scale).
+  + `.gemini/skills/impeccable/scripts/impeccable.cmd detect --json src`: Bộ quét lỗi hình học
+    và anti-patterns giao diện.
+- Lỗi anti-pattern phát hiện qua Impeccable:
+  + `src/components/dispute/ReportModal.css` (dòng 36): Khuyết tật "side-tab" với
+    `border-left: 3px solid ...` (vi phạm tính thuần nhất của khung viền lưu trữ).
+  + Đã sửa chữa: Chuyển sang viền toàn phần nhẹ `border: 1px solid var(--color-border);`
+    và nền `var(--color-ground)`.
+  + Kết quả kiểm tra lại: Bộ phát hiện khuyết tật Impeccable trả về `[]` (0 defects).
+
+--------------------------------------------------------------------------------
+III. DANH SÁCH LỖI ĐÃ PHÁT HIỆN & PHƯƠNG ÁN XỬ LÝ
+--------------------------------------------------------------------------------
+1. Lỗi Điều hướng & Nhãn "Coming Soon" giả tạo:
+   - Hiện trạng trước sửa:
+     + Menu "Tác giả" dẫn tới `/authors` chỉ hiển thị dòng chữ "(Coming Soon)".
+     + Menu "Cách hoạt động" dẫn tới `/how-it-works` chỉ hiển thị "(Coming Soon)".
+     + Đường dẫn `/copyright/register` trỏ vào `Register.tsx` - một trang stepper giả lập
+       với dữ liệu mock cứng ("0x71C...", "The Architecture of Decentralization", v.v.)
+       trong khi luồng đăng ký bản quyền thật của Step 03/04 nằm ở `RegisterCopyrightModal`.
+   - Khắc phục:
+     + Xây dựng trang `src/pages/Authors.tsx`: Danh mục tác giả công khai thực tế, truy vấn
+       từ cơ sở dữ liệu SQL Server các tác giả đã được duyệt (Verified Authors) và số lượng
+       tác phẩm đã xuất bản của họ.
+     + Xây dựng trang `src/pages/HowItWorks.tsx`: Diễn giải uy tín, chuẩn mực học thuật về
+       mô hình 3 tầng (Library First -> Copyright Second -> Blockchain Underneath) và luồng
+       thực hiện dành cho Độc giả lẫn Tác giả.
+     + Xây dựng `src/pages/AuthorStudio.tsx`: Không gian tác giả hoàn chỉnh, tập trung toàn bộ
+       nghiệp vụ tác phẩm, phiên bản tài liệu, kiểm tra mã băm SHA-256, đăng ký bản quyền
+       và đối soát blockchain. Định tuyến lại `/copyright/register` về Author Studio.
+
+2. Trải nghiệm kết nối Ví Web3 gây xao nhãng cho Độc giả:
+   - Hiện trạng: Nút "Connect Wallet" hiển thị cố định ở đầu trang cho mọi người dùng, kể cả
+     khách vãng lai chỉ vào đọc sách công khai. Điều này biến thư viện thành một sàn giao dịch tiền số.
+   - Khắc phục:
+     + Tái cấu trúc `Navbar.tsx`: Áp dụng cơ chế hiển thị ngữ cảnh (Contextual Rendering).
+     + Nút kết nối ví chỉ hiển thị khi người dùng đã kết nối trước đó, hoặc khi đăng nhập với
+       vai trò `AUTHOR` hoặc `ADMIN`.
+     + Độc giả thông thường có thanh điều hướng tinh giản: Khám phá, Tác giả, Cách hoạt động,
+       Xác minh bản quyền, Chuyển theme/ngôn ngữ và Đăng nhập.
+
+3. Thiếu Trang Tổng Quan Quản Trị Trung Tâm (Admin Executive Overview):
+   - Hiện trạng: Giao diện Admin chỉ có các tab rời rạc (Mã mời, Duyệt tác giả, Khiếu nại, Governance),
+     thiếu một dashboard tổng quan hiển thị chỉ số sức khỏe hệ thống và tình trạng phân luồng xử lý.
+   - Khắc phục:
+     + Bổ sung endpoint backend `GET /api/admin/overview`: Thực hiện truy vấn trực tiếp vào SQL Server
+       đếm số yêu cầu bút danh chờ duyệt, tác giả đã xác thực, mã mời hiệu lực, khiếu nại đang mở,
+       bản ghi on-chain, sách đã xuất bản và tổng số tài khoản.
+     + Bổ sung Tab `OVERVIEW` làm tab mặc định trong `AdminDashboard.tsx`, bao gồm:
+       * 4 thẻ điều phối hành động nhanh (Action Triage Cards) có nút nhảy trực tiếp đến tab xử lý.
+       * Bảng trạng thái hạ tầng Smart Contract & Circuit Breaker thời gian thực.
+       * Bảng thống kê kho lưu trữ tài liệu số và phân bổ người dùng.
+
+4. Lỗi Cú pháp SQL Server trong `adminController.ts`:
+   - Hiện trạng: Truy vấn `dbo.AuthorInvitations WHERE Status = 'ACTIVE'` báo lỗi SQL Server
+     do bảng `AuthorInvitations` không có cột `Status` (trạng thái được xác định bằng logic
+     `RevokedAt IS NULL AND ExpiresAt > SYSUTCDATETIME() AND (MaxUses = 0 OR UsedCount < MaxUses)`).
+   - Khắc phục: Chuẩn hóa câu lệnh SQL trong `getOverviewStats`, kiểm thử trực tiếp trên SQL Server
+     thành công 100%.
+
+5. Hạn chế Typography & Hiển thị Tiếng Việt:
+   - Hiện trạng: Thiếu subset `vietnamese` trong Google Fonts import, chiều rộng dòng đọc văn bản
+     quá dài gây mỏi mắt trên màn hình rộng.
+   - Khắc phục:
+     + Cập nhật `src/index.css`: Thêm `&subset=vietnamese,latin-ext` cho cụm font Playfair Display,
+       Cinzel, Outfit và JetBrains Mono.
+     + Bổ sung font fallback tiêu chuẩn Việt Nam/đa nền tảng (`Times New Roman`, `Baskerville`, `Segoe UI`).
+     + Bổ sung class tiện ích `.prose-reading` giới hạn độ rộng đọc tối ưu 65-75 ký tự (72ch).
+
+--------------------------------------------------------------------------------
+IV. TỔ CHỨC LẠI ĐIỀU HƯỚNG VÀ 3 KHU VỰC CHỨC NĂNG
+--------------------------------------------------------------------------------
+A. KHU VỰC ĐỘC GIẢ & THƯ VIỆN SỐ (PUBLIC READER ZONE):
+   - Trang chủ (`/`): Giới thiệu triết lý sản phẩm, hồ sơ tác phẩm nổi bật, tìm kiếm nhanh.
+   - Khám phá Thư viện (`/discover`): Bộ lọc danh mục, trạng thái bản quyền, tìm kiếm tựa đề/tác giả.
+   - Chi tiết & Đọc sách (`/book/:id`): Xem metadata sách, đọc PDF trực tuyến, tải tệp, xem chứng thư.
+   - Danh mục Tác giả (`/authors`): Danh sách học giả đã xác thực hồ sơ và số lượng tác phẩm.
+   - Cách Thức Hoạt Động (`/how-it-works`): Diễn giải kiến trúc 3 tầng và quy trình kiểm tra minh bạch.
+   - Xác minh Độc lập (`/verify`): Băm tệp SHA-256 trực tiếp trên trình duyệt, đối chiếu Smart Contract.
+
+B. KHU VỰC TÁC GIẢ (AUTHOR STUDIO ZONE):
+   - Không gian Tác giả (`/author/studio`):
+     + Tab 1 - Tác phẩm của tôi (Works): Tạo sách mới, tải phiên bản tài liệu (hỗ trợ Local Vault & IPFS),
+       thêm đồng tác giả (Co-author, Editor, Translator), chuyển trạng thái Bản nháp / Xuất bản.
+     + Tab 2 - Sổ cái Bản quyền (Copyright): Kiểm tra toàn vẹn băm SHA-256 (File Integrity Check),
+       đăng ký bản quyền lên Smart Contract qua MetaMask, nút Đối soát giao dịch tự động.
+     + Tab 3 - Khiếu nại & Tranh chấp (Reports): Giám sát các báo cáo vi phạm liên quan đến tác phẩm.
+   - Hiển thị Banner trạng thái phê duyệt bút danh rõ ràng:
+     + `PENDING`: Cảnh báo hồ sơ đang chờ Admin duyệt, tạm khóa chức năng đăng sách mới.
+     + `REJECTED`: Hiển thị lý do từ chối từ Admin kèm nút chuyển sang trang Profile để nộp lại.
+     + `VERIFIED`: Mở khóa toàn bộ quyền sáng tác và phát hành.
+
+C. KHU VỰC QUẢN TRỊ VIÊN (ADMIN ROOT CONTROL ROOM):
+   - Bảng điều khiển Quản trị (`/admin`): 5 phân hệ chuyên biệt theo đúng năng lực hệ thống:
+     1. TỔNG QUAN (OVERVIEW): Thống kê số liệu trực tiếp từ SQL Server, giám sát Circuit Breaker,
+        truy cập nhanh 4 hàng đợi xử lý.
+     2. DUYỆT TÁC GIẢ (AUTHOR_REQUESTS): Tiếp nhận hồ sơ đăng ký bút danh, xem xét tiểu sử,
+        phê duyệt cấp quyền AUTHOR hoặc từ chối kèm lý do bắt buộc.
+     3. MÃ MỜI TÁC GIẢ (INVITATIONS): Tạo mã mời với thời hạn và lượt dùng, thu hồi mã mời.
+     4. TRANH CHẤP & KHIẾU NẠI (DISPUTES): Tiếp nhận khiếu nại bản quyền, ghi chép biên bản xử lý,
+        thực thi tác vụ on-chain (Đánh dấu tranh chấp DISPUTE, Thu hồi REVOKE, Khôi phục ACTIVE).
+     5. SMART CONTRACT GOVERNANCE: Kiểm soát Cầu dao khẩn cấp (Pause / Unpause), giám sát địa chỉ hợp đồng.
+
+--------------------------------------------------------------------------------
+V. KẾT QUẢ KIỂM THỬ HỒI QUY & CHẤT LƯỢNG MÃ NGUỒN
+--------------------------------------------------------------------------------
+1. Impeccable Mechanical Defect Detector:
+   - Lệnh: `.\.gemini\skills\impeccable\scripts\impeccable.cmd detect --json src`
+   - Kết quả: [] (0 khuyết tật).
+
+2. Oxlint Static Code Analysis:
+   - Lệnh: `npm run lint`
+   - Kết quả: 0 errors (Passed).
+
+3. TypeScript Compiler & Vite Production Build:
+   - Lệnh: `npm run build` (`tsc -b && vite build`)
+   - Kết quả: 2102 modules transformed, 0 errors, sinh bundle `dist/` hoàn chỉnh trong 839ms.
+
+4. Integration & Unit Test Suite (Vitest):
+   - Lệnh: `npm test` (`vitest run --fileParallelism=false`)
+   - Kết quả:
+     + 9/9 Test Files passed:
+       * tests/step05_dispute_management.test.ts (18 tests)
+       * tests/step02_1_invitations.test.ts (19 tests)
+       * tests/step04_copyright_integration.test.ts (14 tests)
+       * tests/step02_books.test.ts (22 tests)
+       * tests/step07_author_approval.test.ts (19 tests)
+       * tests/step06_storage_reconciliation.test.ts (8 tests)
+       * tests/api.test.ts (13 tests)
+       * tests/step03_1_wallet.test.ts (9 tests)
+       * tests/step03_blockchain_utils.test.ts (7 tests)
+     + Tổng số bài test vượt qua: 129 / 129 tests (100% PASS).
+
+5. Hardhat Smart Contract Tests:
+   - Lệnh: `npm run contracts:test`
+   - Kết quả: 29 / 29 contract unit tests passing (100% PASS).
+
+6. Kiểm thử API Trực tiếp (Live Backend Endpoints):
+   - `GET /api/books/authors`: Trả về danh sách tác giả kèm số sách xuất bản từ SQL Server.
+   - `GET /api/admin/overview`: Trả về số liệu sống (47 yêu cầu chờ duyệt, 4 tác giả đã xác thực,
+     33 bản ghi on-chain, 15 tác phẩm xuất bản, 152 tài khoản).
+
+--------------------------------------------------------------------------------
+VI. HƯỚNG DẪN CHẠY DỰ ÁN & KIỂM TRA CÁC PHÂN HỆ
+--------------------------------------------------------------------------------
+1. Khởi động Hardhat Local Node:
+   npx hardhat node
+
+2. Khởi động đồng thời Frontend & Backend Dev Servers:
+   npm run dev:all
+   - Frontend Client: http://localhost:5173
+   - Backend API: http://localhost:5000
+
+3. Kiểm tra các luồng nghiệp vụ chính:
+   - Luồng Độc giả: Truy cập `/discover`, đọc thử sách, vào `/authors` xem danh bạ tác giả,
+     vào `/how-it-works` đọc kiến trúc, vào `/verify` tải tệp PDF để tính SHA-256.
+   - Luồng Tác giả: Đăng nhập tài khoản tác giả, truy cập `/author/studio` để tạo tác phẩm,
+     tải tệp bản thảo, kiểm tra mã băm và ký bản quyền lên Blockchain.
+   - Luồng Quản trị: Đăng nhập tài khoản Admin, truy cập `/admin` để xem Tổng quan hệ thống
+     và điều hướng sang các phân hệ Duyệt tác giả, Quản lý mã mời, Tranh chấp & Circuit Breaker.
+================================================================================

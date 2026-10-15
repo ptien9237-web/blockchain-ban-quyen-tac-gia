@@ -1,0 +1,264 @@
+================================================================================
+BÁO CÁO NGHIỆM THU KỸ THUẬT — BƯỚC 03
+DỰ ÁN: BOOKCHAIN LIBRARY — DIGITAL LIBRARY & BLOCKCHAIN COPYRIGHT REGISTRY
+Nhiệm vụ: SMART CONTRACT & BLOCKCHAIN COPYRIGHT REGISTRY
+Thời điểm thực hiện: 14/10/2026
+Vai trò: Senior Blockchain Developer + Smart Contract Security Engineer
+Môi trường: Windows, Node.js v24.19.0, TypeScript, Hardhat 2.29.1, Solidity 0.8.28,
+            OpenZeppelin Contracts v5.6.1, React 19, Express, SQL Server 2025.
+================================================================================
+
+1. TÓM TẮT KẾT QUẢ
+--------------------------------------------------------------------------------
+- Đã thiết kế, xây dựng, kiểm thử và triển khai thành công Smart Contract lưu trữ
+  bằng chứng bản quyền tác giả bất biến (BookCopyrightRegistry.sol).
+- Tuân thủ nghiêm ngặt nguyên tắc kiến trúc:
+  "Library First, Copyright Second, Blockchain Underneath".
+  SQL Server tiếp tục lưu trữ toàn bộ dữ liệu nghiệp vụ; Smart Contract lưu trữ
+  chứng cứ mật mã cốt lõi: mã băm SHA-256 (bytes32), định danh bản ghi và sách,
+  thứ tự phiên bản, ví tác giả, mốc thời gian khối và trạng thái hiệu lực.
+- Tuyệt đối không lưu nội dung tệp trực tiếp lên blockchain.
+- Đạt 100% tỷ lệ vượt qua ở toàn bộ các bộ kiểm thử:
+  * 29/29 bài kiểm thử đơn vị Smart Contract (bao phủ toàn bộ 14 trường hợp bắt buộc).
+  * 61/61 bài kiểm thử tích hợp hệ thống (bao gồm 54 bài cũ của Bước 01, 02, 02.1
+    và 7 bài mới kiểm tra tính nhất quán mật mã).
+  * 0 lỗi linter (Oxlint).
+  * Biên dịch TypeScript và đóng gói Vite bundle thành công 100%.
+- Triển khai thành công trên môi trường cục bộ (Hardhat network/node) với giao dịch
+  và tương tác thực tế 100% đạt kết quả.
+- Đã chuẩn bị toàn bộ cấu hình, kịch bản, ABI và tài liệu tích hợp cho Bước 04.
+- Đánh giá Sepolia: Đã sẵn sàng mạng và kịch bản; báo cáo trung thực:
+  "Hoàn thành phần local, chưa hoàn thành Sepolia deployment do môi trường thiếu
+  RPC và ví có ETH testnet".
+
+2. KIẾN TRÚC ĐÃ TRIỂN KHAI (ON-CHAIN & OFF-CHAIN SEPARATION)
+--------------------------------------------------------------------------------
+- Off-chain (SQL Server 2025):
+  * dbo.Books: Quản lý tiêu đề, mô tả, ảnh bìa, ngôn ngữ, trạng thái xuất bản.
+  * dbo.AuthorProfiles & dbo.BookAuthors: Quản lý quyền tác giả và đồng tác giả.
+  * dbo.BookFiles: Quản lý tệp nhị phân trên đĩa/IPFS, AccessLevel (PRIVATE,
+    PUBLIC_READ, PUBLIC_DOWNLOAD), và mã băm Sha256 CHAR(64).
+  * dbo.CopyrightRecords: Quản lý yêu cầu đăng ký nghiệp vụ và trạng thái nội bộ.
+  * dbo.BlockchainTransactions: Quản lý hàng đợi và biên lai giao dịch on-chain.
+- On-chain (Ethereum Sepolia / Hardhat Local):
+  * RecordId (bytes32): Khóa chính định danh bản ghi bản quyền.
+  * BookId (bytes32): Định danh tác phẩm tương ứng trong thư viện.
+  * VersionNumber (uint32): Số thứ tự phiên bản sách (1, 2, 3...).
+  * ContentHash (bytes32): Mã băm SHA-256 từ chuỗi byte thật của tệp.
+  * AuthorWallet (address): Địa chỉ ví công khai của tác giả sở hữu.
+  * Registrant (address): Địa chỉ ví thực hiện giao dịch ghi nhận (REGISTRAR_ROLE).
+  * RegisteredAt (uint64): Block timestamp khi giao dịch được xác nhận.
+  * Status (enum): ACTIVE (0), DISPUTED (1), REVOKED (2).
+  * MetadataUri (string): Tham chiếu IPFS CID hoặc canonical URI.
+
+3. DANH SÁCH CONTRACT VÀ CHỨC NĂNG (BookCopyrightRegistry.sol)
+--------------------------------------------------------------------------------
+Hợp đồng kế thừa:
+- OpenZeppelin AccessControl: DEFAULT_ADMIN_ROLE, REGISTRAR_ROLE.
+- OpenZeppelin Pausable: Cơ chế ngắt mạch tạm dừng khẩn cấp (Circuit Breaker).
+
+Các chức năng cốt lõi:
+1. registerCopyright(bytes32 recordId, bytes32 bookId, uint32 versionNumber,
+                     bytes32 contentHash, address authorWallet, string metadataUri)
+   - Quyền: onlyRole(REGISTRAR_ROLE) và whenNotPaused.
+   - Kiểm tra: Non-zero identifiers, versionNumber > 0, chống trùng recordId,
+     chống trùng contentHash trên toàn mạng, chống trùng (bookId, versionNumber).
+   - Sự kiện: CopyrightRegistered.
+2. getCopyright(bytes32 recordId)
+   - Tra cứu đầy đủ struct CopyrightRecord theo recordId. Revert nếu không tìm thấy.
+3. getCopyrightByHash(bytes32 contentHash)
+   - Tra cứu đầy đủ bản ghi theo SHA-256 contentHash. Revert nếu chưa đăng ký.
+4. verifyHash(bytes32 contentHash)
+   - Hàm tra cứu công khai an toàn, không revert nếu hash chưa có trong hệ thống.
+   - Trả về: (bool exists, bytes32 recordId, bytes32 bookId, uint32 versionNumber,
+              address authorWallet, address registrant, uint64 registeredAt, RecordStatus status).
+5. getRecordByBookVersion(bytes32 bookId, uint32 versionNumber)
+   - Tra cứu bản ghi của một phiên bản cụ thể của cuốn sách.
+6. getBookVersionCount(bytes32 bookId) & getBookVersions(bytes32 bookId)
+   - Tra cứu tổng số phiên bản và danh sách các versionNumber đã đăng ký của cuốn sách.
+7. disputeCopyright(bytes32 recordId, string reason)
+   - Quyền: onlyRole(DEFAULT_ADMIN_ROLE). Chuyển trạng thái sang DISPUTED.
+8. resolveDispute(bytes32 recordId, RecordStatus newStatus, string reason)
+   - Quyền: onlyRole(DEFAULT_ADMIN_ROLE). Khôi phục ACTIVE hoặc chuyển REVOKED.
+9. revokeCopyright(bytes32 recordId, string reason)
+   - Quyền: onlyRole(DEFAULT_ADMIN_ROLE). Thu hồi bản quyền vi phạm.
+10. pause() & unpause()
+    - Quyền: onlyRole(DEFAULT_ADMIN_ROLE). Tạm dừng hoặc tiếp tục đăng ký.
+
+4. DANH SÁCH TỆP TIN TẠO MỚI VÀ CHỈNH SỬA
+--------------------------------------------------------------------------------
+A. Tệp tin tạo mới:
+1. contracts/BookCopyrightRegistry.sol
+2. hardhat.config.cjs
+3. vitest.config.ts
+4. test/contracts/BookCopyrightRegistry.test.cjs
+5. scripts/deploy.cjs
+6. scripts/interact.cjs
+7. scripts/exportArtifacts.cjs
+8. server/contracts/BookCopyrightRegistry.json & BookCopyrightRegistry.ts
+9. src/contracts/BookCopyrightRegistry.json & BookCopyrightRegistry.ts
+10. server/blockchain/utils.ts
+11. src/utils/blockchain.ts
+12. tests/step03_blockchain_utils.test.ts
+13. project_documentation/STEP_04_INTEGRATION_SPEC.md
+14. STEP_03_REPORT.txt
+
+B. Tệp tin đã chỉnh sửa:
+1. package.json (Bổ sung dependencies và các scripts hợp đồng)
+2. .env.example (Bổ sung biến mẫu Sepolia)
+3. .gitignore (Bổ sung cache, artifacts, typechain)
+4. PROJECT_NOTES.txt (Cập nhật tài liệu kiến trúc, hướng dẫn Bước 03)
+5. AI_LOG.md (Ghi nhật ký chi tiết Bước 03)
+
+5. KẾT QUẢ COMPILE, TEST, LINT VÀ BUILD THỰC TẾ
+--------------------------------------------------------------------------------
+- Compile Smart Contracts:
+    Command: npm run contracts:compile
+    Result : Compiled 7 Solidity files successfully (evm target: paris).
+    Status : PASS
+
+- Unit Tests Smart Contract (Hardhat Mocha):
+    Command: npm run contracts:test
+    Result : 29 passing (1s) — 29/29 tests PASSED (100%)
+    Status : PASS
+
+    Chi tiết 14 nhóm kiểm thử bắt buộc:
+    [Case 1]  Triển khai hợp đồng và khởi tạo vai trò quản trị.
+    [Case 2]  Đăng ký một bản ghi hợp lệ qua REGISTRAR_ROLE.
+    [Case 3]  Tra cứu bản ghi vừa đăng ký qua getCopyright.
+    [Case 4]  Xác minh hash tồn tại qua verifyHash (exists = true).
+    [Case 5]  Xác minh hash chưa đăng ký qua verifyHash (exists = false).
+    [Case 6]  Từ chối dữ liệu bắt buộc bị thiếu/không hợp lệ (recordId=0, bookId=0, vNum=0, hash=0).
+    [Case 7]  Từ chối đăng ký trùng: trùng recordId, trùng contentHash, trùng (bookId, vNum).
+    [Case 8]  Từ chối địa chỉ không có quyền ghi nhận (thiếu REGISTRAR_ROLE).
+    [Case 9]  Từ chối thao tác quản trị từ địa chỉ không có quyền (dispute, revoke, pause).
+    [Case 10] Quản lý đa phiên bản độc lập (v1 và v2 cùng tồn tại, không ghi đè).
+    [Case 11] Phát đúng sự kiện CopyrightRegistered và CopyrightStatusUpdated.
+    [Case 12] Đảm bảo không phát sự kiện thành công khi giao dịch revert.
+    [Case 13] Vòng đời trạng thái: ACTIVE -> DISPUTED -> ACTIVE/REVOKED, từ chối lý do rỗng.
+    [Case 14] Tính nhất quán tuyệt đối giữa Node.js SHA-256 và Solidity bytes32.
+    [Extra]   Kiểm tra cơ chế Pausable (ngắt mạch khẩn cấp khi paused).
+
+- System Tests (Vitest):
+    Command: npm run test
+    Result : 4 test files, 61 tests passed (100%):
+             * tests/step02_1_invitations.test.ts (19 tests)
+             * tests/step02_books.test.ts (22 tests)
+             * tests/api.test.ts (13 tests)
+             * tests/step03_blockchain_utils.test.ts (7 tests)
+    Status : PASS
+
+- Linter (Oxlint):
+    Command: npm run lint
+    Result : 0 errors
+    Status : PASS
+
+- Build & Typecheck (TypeScript + Vite):
+    Command: npm run build
+    Result : tsc -b && vite build -> build thành công bundle ra dist/ (1.13s)
+    Status : PASS
+
+6. KẾT QUẢ TRIỂN KHAI LOCAL (LOCAL DEPLOYMENT)
+--------------------------------------------------------------------------------
+- Lệnh thực thi: npx hardhat run scripts/deploy.cjs --network hardhat
+- Kết quả thực tế:
+  * Network Name     : hardhat
+  * Chain ID         : 31337
+  * Deployer Address : 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+  * Contract Address : 0x5FbDB2315678afecb367f032d93F642f64180aa3
+  * Deployment Tx    : 0xc8927c910e9730a6a27f25678aadd5fb2f9b272c1fca7d3ae4784bd4a86d7b1b
+  * Block Number     : 1
+- Kịch bản tương tác đầy đủ (scripts/interact.cjs):
+  * Đăng ký thành công bản quyền sách "Dế Mèn Phiêu Lưu Ký (Tô Hoài)" Phiên bản 1.
+  * Gas đã sử dụng: 345,956 gas.
+  * Tra cứu verifyHash: exists = true, chính xác 100% các trường dữ liệu.
+  * Đăng ký tiếp Phiên bản 2 (bản in minh họa màu 2026): Thành công, bookVersionCount = 2.
+  * Thực hiện quy trình khiếu nại (disputeCopyright) -> Status chuyển sang DISPUTED (1).
+  * Thực hiện giải quyết khiếu nại (resolveDispute) -> Status khôi phục ACTIVE (0).
+
+7. KẾT QUẢ TRIỂN KHAI SEPOLIA TESTNET
+--------------------------------------------------------------------------------
+- Trạng thái: HOÀN THÀNH PHẦN LOCAL, CHƯA HOÀN THÀNH SEPOLIA DEPLOYMENT.
+- Lý do: Môi trường hiện tại chưa được cấp khóa mạng SEPOLIA_RPC_URL và ví triển
+  khai SEPOLIA_PRIVATE_KEY có số dư ETH Sepolia thử nghiệm.
+- Cấu hình đã sẵn sàng: hardhat.config.cjs đã thiết lập network `sepolia` với chainId
+  11155111, tự động nạp từ biến môi trường; kịch bản `scripts/deploy.cjs` đã sẵn sàng
+  kiểm tra số dư và phát sóng an toàn ngay khi có secret trong file .env cục bộ.
+- Tuân thủ quy định: Không bịa đặt địa chỉ ví, hash giao dịch hoặc kết quả Sepolia ảo.
+
+8. THÔNG TIN CONTRACT VÀ GIAO DỊCH THỰC TẾ
+--------------------------------------------------------------------------------
+- File hợp đồng: contracts/BookCopyrightRegistry.sol
+- Compiler: Solidity 0.8.28 (optimizer: enabled, runs: 200, evmTarget: paris)
+- Contract Local Address : 0x5FbDB2315678afecb367f032d93F642f64180aa3
+- Deployer Local Address : 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+- Local Tx Hash          : 0xc8927c910e9730a6a27f25678aadd5fb2f9b272c1fca7d3ae4784bd4a86d7b1b
+- ABI Artifacts Location :
+  * server/contracts/BookCopyrightRegistry.json & BookCopyrightRegistry.ts
+  * src/contracts/BookCopyrightRegistry.json & BookCopyrightRegistry.ts
+
+9. CÁC VẤN ĐỀ BẢO MẬT ĐÃ XỬ LÝ
+--------------------------------------------------------------------------------
+1. Quản lý bí mật và Private Key:
+   - Private key và RPC URL được cấu hình chỉ nạp từ biến môi trường (.env).
+   - Đã đưa .env và .env.* vào .gitignore; tuyệt đối không commit private key,
+     không in secret ra console log hay báo cáo.
+2. Kiểm soát truy cập nghiêm ngặt (RBAC on-chain):
+   - Hàm registerCopyright được bảo vệ bằng onlyRole(REGISTRAR_ROLE).
+   - Các thao tác quản trị (dispute, resolve, revoke, pause, unpause) chỉ cho phép
+     tài khoản có DEFAULT_ADMIN_ROLE thực hiện.
+3. Chống ghi đè và bảo toàn lịch sử tác phẩm:
+   - Một cuốn sách có thể có nhiều phiên bản. Version mới không bao giờ ghi đè hash
+     của version cũ. Mỗi version có bản ghi và bằng chứng tồn tại độc lập.
+4. Chống tấn công Reentrancy và không giữ Ether:
+   - Contract không có hàm payable, không có receive() hay fallback(), không lưu trữ ETH.
+5. Ngắt mạch khẩn cấp (Circuit Breaker):
+   - Tích hợp Pausable cho phép Quản trị viên đóng băng đăng ký tạm thời khi phát hiện
+     sự cố bảo mật hoặc tranh chấp quy mô lớn.
+6. Chống đăng ký trùng lặp (Duplicate Protection):
+   - Revert ngay nếu trùng recordId, trùng contentHash hoặc trùng (bookId, versionNumber).
+
+10. CÁC GIỚI HẠN VÀ ĐIỀU KIỆN TỒN TẠI
+--------------------------------------------------------------------------------
+1. Sepolia Testnet Broadcast: Cần người dùng bổ sung RPC URL (Infura/Alchemy) và
+   Private Key ví có Sepolia ETH vào file .env cục bộ để thực hiện broadcast thực tế.
+2. Chưa kết nối trực tiếp UI/API: Bước 03 hoàn thành phạm vi Smart Contract, testing
+   và công cụ độc lập. Việc kết nối tác giả bấm nút đăng ký từ giao diện để tự động
+   gửi transaction on-chain thuộc phạm vi tích hợp của Bước 04.
+
+11. HƯỚNG DẪN CHẠY LẠI TỪNG BƯỚC (STEP-BY-STEP REPRODUCTION)
+--------------------------------------------------------------------------------
+Bước 1: Biên dịch Smart Contract
+    npm run contracts:compile
+
+Bước 2: Chạy bộ unit tests Smart Contract
+    npm run contracts:test
+
+Bước 3: Chạy bộ kiểm thử hệ thống
+    npm run test
+
+Bước 4: Kiểm tra lint và build bundle
+    npm run lint
+    npm run build
+
+Bước 5: Chạy kịch bản triển khai trên Hardhat local
+    npm run contracts:deploy:local
+
+Bước 6: Chạy tương tác thử nghiệm vòng đời trên local
+    npx hardhat run scripts/interact.cjs --network hardhat
+
+Bước 7: Triển khai lên Ethereum Sepolia (khi có RPC và testnet ETH)
+    - Cập nhật SEPOLIA_RPC_URL và SEPOLIA_PRIVATE_KEY trong .env
+    - Chạy lệnh: npm run contracts:deploy:sepolia
+
+12. PHẠM VI DỰ KIẾN CỦA BƯỚC 04
+--------------------------------------------------------------------------------
+- Xây dựng API Backend và Worker ký phát sóng giao dịch đăng ký bản quyền tự động
+  bằng ví REGISTRAR khi tác giả tạo yêu cầu.
+- Đồng bộ vòng đời giao dịch giữa SQL Server (dbo.CopyrightRecords & dbo.BlockchainTransactions)
+  và Ethereum Sepolia.
+- Tích hợp giải pháp lưu trữ phân tán IPFS (Pinata/Kubo) để lưu trữ tệp và tạo
+  metadata URI chuẩn hóa.
+- Nâng cấp giao diện trang Xác minh (/verify) để hiển thị thông tin tra cứu đối soát
+  trực tiếp từ smart contract thông qua ví MetaMask hoặc Public RPC Provider.
+================================================================================

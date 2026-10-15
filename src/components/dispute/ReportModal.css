@@ -1,0 +1,62 @@
+.report-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1050;
+  padding: 1rem;
+  animation: reportModalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.report-modal-dialog {
+  width: 100%;
+  max-width: 540px;
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: 4px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+  animation: reportModalSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.report-modal-icon-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  background-color: rgba(211, 47, 47, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.report-target-card {
+  border: 1px solid var(--color-border);
+  background-color: var(--color-ground);
+}
+
+.report-summary-box {
+  border-radius: 2px;
+}
+
+@keyframes reportModalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes reportModalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

@@ -1,0 +1,190 @@
+================================================================================
+BÁO CÁO NGHIỆM THU BƯỚC 02: HOÀN THIỆN QUẢN LÝ SÁCH VÀ NỀN TẢNG ĐỌC SỐ
+(BOOK MANAGEMENT & DIGITAL READING FOUNDATION)
+DỰ ÁN: BOOKCHAIN LIBRARY — DIGITAL LIBRARY & BLOCKCHAIN COPYRIGHT REGISTRY
+================================================================================
+
+1. TÓM TẮT KẾT QUẢ
+- Trạng thái chung: HOÀN THÀNH TOÀN DIỆN (PASS).
+- Đã thay thế toàn bộ dữ liệu mô phỏng trong phân hệ Quản lý Sách, Đồng tác giả, 
+  Phiên bản tệp, Tính toán mã băm SHA-256 và Kiểm soát quyền đọc/tải bằng dữ liệu 
+  thật trên Microsoft SQL Server 2025 và hệ thống lưu trữ tệp máy chủ cục bộ.
+- Đã tuân thủ triệt để triết lý cốt lõi: "LIBRARY FIRST, COPYRIGHT SECOND, BLOCKCHAIN UNDERNEATH".
+- Đã giữ nguyên vẹn 100% kiến trúc hệ thống hiện có (React 19 + TypeScript + Vite, 
+  Express + TypeScript + MSSQL Pool, Design Tokens Vanilla CSS phong cách "Archival Reading Room", 
+  AuthContext, HttpOnly Session Cookie và phân quyền RBAC 3 cấp từ Bước 01).
+
+2. CÁC CHỨC NĂNG ĐÃ HOÀN THÀNH
+- [PASS] 1. Quản lý tác phẩm (Book Management):
+  * Tạo mới tác phẩm trong CSDL với tiêu đề, mô tả, ảnh bìa, mã ngôn ngữ và trạng thái xuất bản.
+  * Tự động liên kết tác giả tạo sách làm PRIMARY_AUTHOR với thứ tự hiển thị DisplayOrder = 1 qua Transaction.
+  * Lấy danh mục sách công khai (Discover) có tìm kiếm theo từ khóa và lọc ngôn ngữ.
+  * Lấy danh sách tác phẩm của tác giả hiện tại (My Books).
+  * Lấy chi tiết sách bao gồm danh sách tác giả, phiên bản tệp hiện hành.
+  * Cập nhật thông tin tác phẩm có kiểm tra quyền sở hữu IDOR nghiêm ngặt.
+  * Chuyển đổi trạng thái xuất bản (DRAFT, PUBLISHED, UNLISTED, ARCHIVED) theo đúng quy tắc nghiệp vụ.
+- [PASS] 2. Quản lý nhiều tác giả (Multi-Author Management):
+  * Hỗ trợ quan hệ nhiều-nhiều giữa sách và hồ sơ tác giả qua bảng dbo.BookAuthors.
+  * Hỗ trợ các vai trò đóng góp: PRIMARY_AUTHOR, CO_AUTHOR, EDITOR, TRANSLATOR.
+  * Kiểm tra tác giả thêm vào phải tồn tại trong dbo.AuthorProfiles.
+  * Chống tạo quan hệ trùng lặp (Duplicate check).
+  * Chỉ tác giả sở hữu sách mới có quyền mời hoặc thêm đồng tác giả.
+- [PASS] 3. Tầng lưu trữ tệp và quản lý phiên bản (File Storage & Versioning):
+  * Xây dựng tầng lưu trữ trừu tượng IStorageProvider với triển khai LocalStorageProvider.
+  * Lưu trữ an toàn tại thư mục máy chủ (storage/books/) với Safe File Key YYYYMMDD_<uuid>.<ext>, chống Path Traversal.
+  * Tiếp nhận file tải lên qua Multer (PDF, EPUB, TXT) với giới hạn kích thước an toàn 50MB.
+  * Quản lý phiên bản tệp tăng tiến (VersionNumber = MAX + 1) trong ACID Transaction trên SQL Server.
+  * Đảm bảo ràng buộc duy nhất một phiên bản hiện hành (IsCurrent = 1) cho mỗi tác phẩm.
+  * Xem toàn bộ lịch sử phiên bản tệp của tác phẩm.
+- [PASS] 4. Tính toán và đối soát SHA-256 thực tế (Authentic SHA-256 Calculation & Verification):
+  * Backend tính mã băm SHA-256 trực tiếp từ chuỗi byte nhị phân của tệp nhận được bằng crypto.createHash('sha256').
+  * Không tin mã hash do client gửi lên; lưu trữ chuỗi hexadecimal 64 ký tự chuẩn vào dbo.BookFiles.Sha256Hash.
+  * Endpoint đối soát toàn vẹn (/api/books/:id/files/:fileId/verify) đọc lại byte tệp trên đĩa máy chủ và so khớp với CSDL.
+  * Phát hiện chính xác trường hợp tệp bị sửa đổi nội dung trên đĩa (hash mismatch: verified = false).
+  * Hỗ trợ tra cứu Sổ cái CSDL theo mã băm SHA-256 (/api/books/verify-hash/:hash).
+- [PASS] 5. Kiểm soát quyền đọc và tải file (Access Level Enforcement):
+  * Hỗ trợ 3 cấp độ: PRIVATE, PUBLIC_READ, PUBLIC_DOWNLOAD.
+  * PRIVATE: Chặn hoàn toàn độc giả bên ngoài (HTTP 403), chỉ cho phép tác giả của sách hoặc Admin đọc/tải.
+  * PUBLIC_READ: Cho phép độc giả đọc trực tuyến (inline stream) qua Archival Reader; chặn tải file gốc (HTTP 403).
+  * PUBLIC_DOWNLOAD: Cho phép độc giả vừa đọc trực tuyến vừa tải file gốc về máy (attachment stream).
+  * Kiểm tra quyền chặt chẽ tại backend, không chỉ ẩn nút trên giao diện.
+- [PASS] 6. Tích hợp giao diện Frontend:
+  * Trang Discover (/discover): Hiển thị danh mục sách thật từ CSDL, tìm kiếm, lọc ngôn ngữ, trạng thái rỗng và lỗi.
+  * Component BookCard: Hiển thị bìa sách thật, danh sách tác giả thật, huy hiệu mã băm SHA-256 thật.
+  * Trang BookDetail (/book/:id): Hiển thị thông tin sách thật, Modal "Archival Reading Room" đọc PDF trực tiếp,
+    trình chọn phiên bản (version switcher), nút tải sách theo quyền, nút kiểm tra tính toàn vẹn SHA-256 trên đĩa máy chủ.
+  * Trang Verify (/verify): Người dùng chọn tệp cục bộ bất kỳ, tính mã băm SHA-256 tức thì bằng Web Crypto API,
+    tra cứu đối chiếu với Sổ cái SQL Server và kiểm tra tính toàn vẹn với tệp lưu trữ của máy chủ.
+  * Trang Profile (/profile): Khu vực Quản lý tác phẩm cho tác giả với danh sách sách của mình, Modal tạo sách mới,
+    Modal tải lên phiên bản mới (chọn AccessLevel), Modal thêm đồng tác giả, nút chuyển đổi trạng thái xuất bản.
+  * Giữ trọn vẹn thẩm mỹ "Archival Reading Room", chế độ Sáng/Tối và song ngữ EN/VI.
+
+3. DANH SÁCH FILE THAY ĐỔI VÀ TẠO MỚI
+
+A. Tệp tin tạo mới:
+1. server/services/storage/storageProvider.ts           - Interface trừu tượng lưu trữ
+2. server/services/storage/localStorageProvider.ts       - Triển khai lưu trữ tệp cục bộ & tính SHA-256 byte
+3. server/middlewares/uploadMiddleware.ts                - Cấu hình Multer upload và kiểm tra định dạng
+4. server/repositories/bookFileRepository.ts             - Tầng truy cập dữ liệu dbo.BookFiles & quản lý phiên bản
+5. server/services/bookService.ts                        - Nghiệp vụ sách, kiểm tra quyền IDOR, đọc/tải tệp
+6. server/db/seedBooks.ts                                - Nạp dữ liệu sách mẫu với file PDF và SHA-256 thật
+7. tests/step02_books.test.ts                            - Bộ 22 bài kiểm thử tự động toàn diện cho Bước 02
+8. STEP_02_REPORT.txt                                    - Báo cáo nghiệm thu Bước 02
+
+B. Tệp tin chỉnh sửa:
+1. server/config/env.ts                                  - Thêm biến môi trường lưu trữ (STORAGE_DRIVER, LOCAL_PATH)
+2. server/types/index.ts                                 - Bổ sung các DTO và Entity sách, tác giả, tệp phiên bản
+3. server/repositories/bookRepository.ts                 - Bổ sung truy vấn danh mục, chi tiết, tạo sách, kiểm tra tác giả
+4. server/repositories/authorProfileRepository.ts        - Bổ sung alias method getByUserId
+5. server/middlewares/authMiddleware.ts                  - Bổ sung optionalAuth middleware
+6. server/controllers/bookController.ts                  - Triển khai toàn bộ handler API sách, tệp, đọc/tải, verify
+7. server/routes/bookRoutes.ts                           - Đăng ký các route bảo vệ và công khai cho phân hệ sách
+8. src/services/api.ts                                   - Bổ sung client booksApi cho frontend
+9. src/components/book/BookCard.tsx                      - Hiển thị sách thật, tác giả thật, SHA-256 thật
+10. src/pages/Discover.tsx                               - Trang Khám phá kết nối API backend thật
+11. src/pages/BookDetail.tsx & BookDetail.css            - Trang Chi tiết tích hợp PDF Reader modal, version switcher, verify hash
+12. src/pages/Verify.tsx                                 - Trang Xác minh tích hợp Web Crypto SHA-256 và backend lookup
+13. src/pages/Profile.tsx & Profile.css                  - Quản lý tác phẩm: tạo sách, upload phiên bản, thêm đồng tác giả
+14. package.json                                         - Thêm multer, cấu hình test runner tuần tự
+15. PROJECT_NOTES.txt                                    - Cập nhật kiến trúc, API và luồng Bước 02
+16. AI_LOG.md                                            - Cập nhật nhật ký kỹ thuật Bước 02
+
+4. DANH SÁCH API HOÀN THIỆN ĐẾN HẾT BƯỚC 02
+- GET    /api/health                             - Kiểm tra trạng thái máy chủ và kết nối SQL Server
+- POST   /api/auth/register                     - Đăng ký tài khoản thành viên
+- POST   /api/auth/login                        - Đăng nhập và tạo phiên
+- POST   /api/auth/logout                       - Đăng xuất và thu hồi phiên
+- GET    /api/auth/me                           - Lấy thông tin tài khoản hiện tại
+- GET    /api/users/profile                     - Lấy hồ sơ cá nhân
+- PUT    /api/users/profile                     - Cập nhật thông tin hồ sơ
+- POST   /api/users/author-profile              - Đăng ký bút danh tác giả
+- GET    /api/books                             - Danh sách sách công khai (tìm kiếm từ khóa, lọc ngôn ngữ)
+- GET    /api/books/my                          - Danh sách sách của tác giả hiện tại
+- GET    /api/books/:id                         - Chi tiết sách (kèm tác giả và phiên bản tệp hiện hành)
+- POST   /api/books                             - Tạo sách mới (Transactional: Book + Primary Author)
+- PUT    /api/books/:id                         - Cập nhật metadata sách (kiểm tra quyền sở hữu IDOR)
+- PATCH  /api/books/:id/status                  - Cập nhật trạng thái xuất bản
+- POST   /api/books/:id/authors                 - Thêm đồng tác giả cho sách
+- POST   /api/books/:id/files                   - Tải lên phiên bản tệp mới (tính SHA-256 byte thật, tăng version)
+- GET    /api/books/:id/files                   - Lấy lịch sử phiên bản tệp của sách
+- GET    /api/books/:id/files/:fileId           - Xem metadata tệp phiên bản
+- GET    /api/books/:id/files/:fileId/read      - Đọc trực tuyến tệp sách (stream inline PDF)
+- GET    /api/books/:id/files/:fileId/download  - Tải tệp sách về máy (chặn nếu mức truy cập là PUBLIC_READ)
+- GET    /api/books/:id/files/:fileId/verify    - Đối soát toàn vẹn SHA-256 giữa tệp trên đĩa và CSDL
+- GET    /api/books/verify-hash/:hash           - Tra cứu tác phẩm theo mã băm SHA-256 từ Sổ cái hệ thống
+
+5. CÁC BẢNG DATABASE ĐƯỢC SỬ DỤNG
+Toàn bộ các bảng sử dụng trực tiếp từ schema gốc BookChainLibrary_SQLServer.sql:
+- dbo.Books (Lưu trữ metadata tác phẩm)
+- dbo.BookAuthors (Quan hệ đa tác giả, vai trò đóng góp, thứ tự hiển thị)
+- dbo.BookFiles (Quản lý phiên bản tệp, kích thước, mã băm SHA-256, mức độ truy cập, tệp hiện hành)
+- dbo.AuthorProfiles (Hồ sơ bút danh tác giả)
+- dbo.Users (Tài khoản người dùng)
+- dbo.Roles & dbo.UserRoles (Vai trò và phân quyền RBAC)
+- dbo.Sessions (Quản lý phiên đăng nhập và thu hồi)
+
+6. CÁCH CHẠY DỰ ÁN
+- Chạy cả hệ thống (Frontend + Backend):
+    npm run dev:all
+- Hoặc chạy độc lập:
+    Terminal 1: npm run server
+    Terminal 2: npm run dev
+- Địa chỉ truy cập:
+    Frontend UI:  http://localhost:5173
+    Backend API:  http://localhost:5000/api/health
+- Nạp dữ liệu mẫu sách thực tế:
+    npx tsx server/db/seedBooks.ts
+
+7. KẾT QUẢ TEST
+- Lệnh thực thi: npm run test (vitest run --fileParallelism=false)
+- Tổng số bài kiểm thử: 35/35 PASSED (100%)
+  * tests/api.test.ts (13 tests - Xác thực, Phiên, Hồ sơ, RBAC Bước 01): 13/13 PASSED
+  * tests/step02_books.test.ts (22 tests - Nghiệp vụ Bước 02): 22/22 PASSED
+- Chi tiết các nhóm kiểm thử Bước 02:
+  * [PASS] Tạo tác phẩm mới với Primary Author tự động
+  * [PASS] Từ chối người dùng chưa có hồ sơ tác giả tạo sách
+  * [PASS] Lấy danh mục sách công khai và lọc theo từ khóa, ngôn ngữ
+  * [PASS] Lấy danh sách tác phẩm của tác giả hiện tại
+  * [PASS] Lấy chi tiết sách bao gồm danh sách đồng tác giả
+  * [PASS] Cập nhật thông tin tác phẩm thành công khi đúng tác giả sở hữu
+  * [PASS] Ngăn chặn IDOR: Từ chối người khác cập nhật sách không thuộc quyền sở hữu (HTTP 403)
+  * [PASS] Chuyển đổi trạng thái xuất bản (PUBLISHED / ARCHIVED)
+  * [PASS] Thêm đồng tác giả mới (CO_AUTHOR) thành công
+  * [PASS] Ngăn chặn thêm đồng tác giả trùng lặp (HTTP 409)
+  * [PASS] Tải lên tệp phiên bản đầu tiên, tính toán mã băm SHA-256 thật từ chuỗi byte
+  * [PASS] Tải lên phiên bản tệp tiếp theo (VersionNumber tăng từ 1 -> 2, phiên bản cũ thành IsCurrent = 0)
+  * [PASS] Từ chối tải lên tệp có định dạng không được hỗ trợ (ví dụ: .exe)
+  * [PASS] Xác minh tính toàn vẹn SHA-256 giữa tệp trên đĩa và bản ghi trong CSDL (verified = true)
+  * [PASS] Phát hiện tệp bị sửa đổi nội dung trên đĩa (hash mismatch: verified = false)
+  * [PASS] Tra cứu thông tin tác phẩm theo mã băm SHA-256 trên Sổ cái CSDL
+  * [PASS] Quyền đọc trực tuyến (inline stream) đối với tệp PUBLIC_READ
+  * [PASS] Chặn tải file gốc đối với tệp PUBLIC_READ (HTTP 403 - Reader-only access)
+  * [PASS] Cho phép tải file gốc đối với tệp PUBLIC_DOWNLOAD
+  * [PASS] Chặn người dùng chưa đăng nhập hoặc không có quyền truy cập tệp PRIVATE (HTTP 403)
+  * [PASS] Cho phép tác giả sở hữu sách truy cập tệp PRIVATE
+
+8. KẾT QUẢ BUILD VÀ LINT
+- Oxlint (npm run lint): PASS (0 errors trên toàn bộ dự án).
+- TypeScript & Vite Build (npm run build): PASS (tsc -b hoàn tất, đóng gói Vite bundle thành công ra thư mục dist/).
+
+9. KẾT QUẢ XÁC MINH SQL SERVER
+- Máy chủ CSDL: Microsoft SQL Server 2025 (RTM) - 17.0.1000.7 (X64) tại localhost.
+- Tên CSDL: BookChainLibrary.
+- Xác thực: SQL Server Authentication với tài khoản sa.
+- Dữ liệu thực tế: Các bảng dbo.Books, dbo.BookAuthors, dbo.BookFiles đã ghi nhận bản ghi thật,
+  mã băm SHA-256 định dạng 64 ký tự hexa thực tế, ràng buộc khóa ngoại và phiên bản hoạt động chính xác.
+
+10. GIỚI HẠN VÀ LỖI CÒN TỒN TẠI
+- Reader PDF hiện tại sử dụng Modal tích hợp trình xem nhị phân chuẩn của trình duyệt (Browser Native PDF Embedder)
+  thông qua stream bảo vệ inline, giúp đảm bảo tương thích 100% với React 19 mà không phụ thuộc thư viện thứ ba lỗi thời.
+  Việc ẩn nút tải file gốc phía giao diện là biện pháp nghiệp vụ chuẩn, không thể ngăn người dùng chụp màn hình
+  khi nội dung đã được kết xuất trên trình duyệt (đúng theo thiết kế không xây dựng DRM giả lập).
+- Môi trường hiện tại chưa cấu hình máy chủ SMTP gửi email thực tế cho quy trình khôi phục mật khẩu.
+
+11. NHỮNG CHỨC NĂNG CHƯA TRIỂN KHAI (NẰM NGOÀI PHẠM VI BƯỚC 02)
+- Hợp đồng thông minh (Smart Contracts) trên Ethereum Sepolia (thuộc Bước 03).
+- Quy trình ký chữ ký số mật mã tác quyền (EIP-712 / Personal Sign) (thuộc Bước 03).
+- Mạng lưu trữ tệp phân tán IPFS (Pinata/Kubo node) (thuộc Bước 04).
+- Giao dịch thanh toán token, phân chia bản quyền (Royalty) trên Blockchain (thuộc Bước 04/05).
+- Bảng điều khiển Quản trị viên xử lý báo cáo vi phạm và tranh chấp bản quyền (thuộc Bước 05).
+================================================================================

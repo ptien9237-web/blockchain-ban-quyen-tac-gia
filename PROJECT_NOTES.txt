@@ -1,0 +1,626 @@
+================================================================================
+BOOKCHAIN LIBRARY — PROJECT NOTES & RUNTIME ARCHITECTURE
+================================================================================
+
+1. MỤC TIÊU DỰ ÁN
+BookChain Library là hệ thống Thư viện số cao cấp kết hợp Sổ cái đăng ký và xác minh
+bản quyền tác phẩm sách bất biến (Digital Library & Blockchain Copyright Registry).
+Triết lý thiết kế cốt lõi:
+  "LIBRARY FIRST, COPYRIGHT SECOND, BLOCKCHAIN UNDERNEATH."
+Phong cách giao diện: "Archival Reading Room" (Phòng đọc Học thuật Lưu trữ), 
+tĩnh lặng, trang nhã, không chạy theo phong cách sàn giao dịch crypto thương mại.
+
+2. KIẾN TRÚC HIỆN TẠI (SAU BƯỚC 02)
+- Frontend: Single Page Application (SPA) phát triển bằng React 19 + TypeScript + Vite.
+  Sử dụng Vanilla CSS và Design Tokens định nghĩa tập trung tại src/index.css.
+  Hỗ trợ song ngữ Anh/Việt (I18nContext) và chế độ Sáng/Tối (ThemeContext).
+  Tích hợp "Archival Reading Room" trực quan: Modal PDF Reader trực tiếp, trình chuyển đổi
+  phiên bản (version switcher), công cụ tính SHA-256 trên trình duyệt (Web Crypto API)
+  kết hợp đối soát với Sổ cái cơ sở dữ liệu và xác minh tính toàn vẹn byte tệp trên đĩa máy chủ.
+- Backend: RESTful API Server phát triển bằng Express + TypeScript (chạy bằng tsx).
+  Tổ chức theo kiến trúc phân tầng chuẩn:
+    Routes -> Controllers -> Services -> Storage Provider / Repositories -> Database (MSSQL Connection Pool).
+- Lưu trữ Tệp (Storage Layer):
+  Kiến trúc trừu tượng hóa StorageProvider qua giao diện IStorageProvider:
+  * LocalStorageProvider: Lưu trữ tệp trên phân vùng máy chủ cục bộ (mặc định tại storage/books/).
+  * Chuẩn hóa tên tệp an toàn (Safe File Key): YYYYMMDD_<uuid>.<ext> ngăn ngừa Path Traversal.
+  * Tính mã băm SHA-256 từ chuỗi byte nhị phân thực tế của tệp nhận được (Node.js crypto).
+  * Đối soát tính toàn vẹn (Integrity Verification): đọc lại byte tệp trên đĩa và so sánh với
+    mã băm đã ghi nhận trong CSDL để phát hiện can thiệp giả mạo.
+  * Chuẩn bị sẵn sàng mở rộng sang IpfsStorageProvider ở các giai đoạn tiếp theo.
+- Database: Microsoft SQL Server 2025 (Database name: BookChainLibrary).
+  Sử dụng các bảng thực tế:
+    dbo.Users, dbo.Roles, dbo.UserRoles, dbo.Sessions, dbo.AuthorProfiles,
+    dbo.Books, dbo.BookAuthors, dbo.BookFiles.
+- Kiểm soát Truy cập & Tác quyền (Access Control & Authorship):
+  * Chỉ tác giả sở hữu (Primary Author hoặc Co-Author) mới có quyền chỉnh sửa sách,
+    thêm đồng tác giả, tải lên phiên bản mới và chuyển đổi trạng thái xuất bản (DRAFT, PUBLISHED, ARCHIVED).
+  * Chặn IDOR nghiêm ngặt tại Backend (kiểm tra liên kết User -> AuthorProfile -> BookAuthors).
+  * Phân quyền đọc/tải tệp theo 3 mức độ (AccessLevel):
+    - PRIVATE: Chỉ tác giả và Quản trị viên được xem nội dung và tải về.
+    - PUBLIC_READ: Cho phép bạn đọc xem/đọc trực tuyến qua Reader nhưng chặn tải file gốc (HTTP 403).
+    - PUBLIC_DOWNLOAD: Cho phép bạn đọc cả đọc trực tuyến lẫn tải file gốc.
+
+3. FRAMEWORK VÀ PHIÊN BẢN ĐÃ KIỂM TRA
+- Node.js: v24.19.0
+- npm: 11.17.0
+- React: 19.2.8
+- React DOM: 19.2.8
+- React Router DOM: 7.18.4
+- TypeScript: 6.0.2
+- Vite: 8.3.2
+- Express: 5.3.0
+- Multer: 2.4.0 (Upload tệp multipart/form-data)
+- MSSQL (tedious driver): 12.7.4
+- Bcryptjs: 3.0.3
+- Jsonwebtoken: 9.0.3
+- Vitest: 5.0.3
+- Supertest: 7.3.1
+- Oxlint: 1.81.0
+- Hardhat: 2.29.1
+- SQL Server: Microsoft SQL Server 2025 (RTM) - 17.0.1000.7 (X64)
+
+4. VAI TRÒ NGƯỜI DÙNG VÀ QUY TẮC QUẢN LÝ
+- READER: Mặc định được gán cho mọi tài khoản đăng ký mới. Có quyền đọc sách công khai.
+- AUTHOR: Tác giả có hồ sơ bút danh và thông tin tiểu sử trong dbo.AuthorProfiles.
+  Có quyền quản lý tác phẩm của mình, thêm đồng tác giả, quản lý phiên bản tệp và trạng thái xuất bản.
+- ADMIN: Quản trị viên xử lý báo cáo vi phạm, tranh chấp và kiểm duyệt.
+  Client tuyệt đối không thể tự nâng quyền lên ADMIN qua form hoặc API.
+
+5. CẤU HÌNH BIẾN MÔI TRƯỜNG (.env)
+File mẫu .env.example ở thư mục gốc:
+--------------------------------------------------------------------------------
+PORT=5000
+NODE_ENV=development
+CLIENT_ORIGIN=http://localhost:5173
+
+DB_SERVER=localhost
+DB_PORT=1433
+DB_NAME=BookChainLibrary
+DB_USER=sa
+DB_PASSWORD="your_db_password"
+DB_TRUST_SERVER_CERTIFICATE=true
+DB_ENCRYPT=false
+
+JWT_SECRET=change_me_to_a_secure_random_string_in_production
+SESSION_EXPIRES_DAYS=7
+COOKIE_SECURE=false
+
+STORAGE_DRIVER=local
+STORAGE_LOCAL_PATH=storage/books
+MAX_UPLOAD_SIZE_MB=50
+--------------------------------------------------------------------------------
+
+6. CÁC API HOÀN THIỆN ĐẾN HẾT BƯỚC 02
+- Health & System:
+  * GET  /api/health                             - Kiểm tra trạng thái server và kết nối SQL Server
+- Authentication:
+  * POST /api/auth/register                     - Đăng ký tài khoản (hashing bcrypt, gán role READER)
+  * POST /api/auth/login                        - Đăng nhập (trả về token và gán HttpOnly cookie)
+  * POST /api/auth/logout                       - Đăng xuất (thu hồi phiên trong dbo.Sessions)
+  * GET  /api/auth/me                           - Lấy thông tin tài khoản đang đăng nhập
+- User Profile & Author Credentials:
+  * GET  /api/users/profile                     - Xem chi tiết hồ sơ cá nhân
+  * PUT  /api/users/profile                     - Cập nhật DisplayName, AvatarUrl
+  * POST /api/users/author-profile              - Đăng ký bút danh & tiểu sử, cấp role AUTHOR
+- Book Catalog & Management (MỚI BƯỚC 02):
+  * GET  /api/books                             - Tra cứu danh mục sách công khai (tìm kiếm, lọc, phân trang)
+  * GET  /api/books/my                          - Lấy danh sách tác phẩm của tác giả đang đăng nhập
+  * GET  /api/books/:id                         - Lấy chi tiết sách (thông tin tác giả, tệp hiện hành, trạng thái)
+  * POST /api/books                             - Tạo tác phẩm mới (Transactional: tạo Book + liên kết Primary Author)
+  * PUT  /api/books/:id                         - Cập nhật metadata sách (kiểm tra quyền sở hữu IDOR)
+  * PATCH /api/books/:id/status                 - Cập nhật trạng thái xuất bản (DRAFT, PUBLISHED, UNLISTED, ARCHIVED)
+  * POST /api/books/:id/authors                 - Thêm đồng tác giả (CO_AUTHOR, EDITOR, TRANSLATOR)
+- Book Files & Versioning (MỚI BƯỚC 02):
+  * POST /api/books/:id/files                   - Tải lên phiên bản tệp mới (tính SHA-256 byte thật, tăng VersionNumber, cập nhật IsCurrent)
+  * GET  /api/books/:id/files                   - Xem lịch sử phiên bản tệp của tác phẩm (yêu cầu quyền sở hữu hoặc xem phiên bản công khai)
+  * GET  /api/books/:id/files/:fileId           - Lấy metadata tệp cụ thể
+  * GET  /api/books/:id/files/:fileId/read      - Đọc trực tuyến tệp sách (hỗ trợ Content-Type application/pdf, chặn nếu PRIVATE và không có quyền)
+  * GET  /api/books/:id/files/:fileId/download  - Tải file gốc về máy (chặn nếu mức truy cập là PRIVATE hoặc PUBLIC_READ đối với người không có quyền tác giả)
+  * GET  /api/books/:id/files/:fileId/verify    - Đối soát toàn vẹn SHA-256: đọc lại tệp trên đĩa và so khớp với mã băm trong CSDL
+  * GET  /api/books/verify-hash/:hash           - Tra cứu tác phẩm và tệp theo mã băm SHA-256 từ Sổ cái hệ thống
+
+7. LUỒNG NGHIỆP VỤ CỐT LÕI (BƯỚC 02)
+- Luồng tạo sách và xác thực tác giả:
+  1. Người dùng phải đăng ký Author Profile để sở hữu vai trò AUTHOR.
+  2. Gửi request POST /api/books kèm Title, Description, CoverUrl, LanguageCode.
+  3. Backend mở Transaction: tạo bản ghi trong dbo.Books, tự động thêm liên kết trong dbo.BookAuthors
+     với AuthorProfileId của người dùng và ContributionRole = 'PRIMARY_AUTHOR', DisplayOrder = 1.
+- Luồng tải lên tệp và quản lý phiên bản:
+  1. Tác giả gửi file (PDF, EPUB, TXT) qua form multipart/form-data lên POST /api/books/:id/files.
+  2. Middleware upload kiểm tra dung lượng (<= 50MB) và MIME type / định dạng tệp.
+  3. LocalStorageProvider lưu tệp an toàn vào thư mục storage/books/, đồng thời tính toán
+     mã băm SHA-256 trực tiếp từ chuỗi byte nhị phân của tệp đã lưu.
+  4. Backend mở Transaction trên SQL Server:
+     - Lấy VersionNumber lớn nhất hiện có của cuốn sách.
+     - Đặt VersionNumber mới = MAX + 1 (mặc định 1 cho file đầu tiên).
+     - Cập nhật tất cả các phiên bản trước đó thành IsCurrent = 0.
+     - Chèn bản ghi phiên bản mới vào dbo.BookFiles với IsCurrent = 1, Sha256Hash thật và AccessLevel.
+- Luồng kiểm soát quyền đọc và tải (Access Level Enforcement):
+  * GET /api/books/:id/files/:fileId/read:
+    - PRIVATE: Chỉ tác giả của sách hoặc ADMIN mới được đọc (HTTP 403 nếu vi phạm).
+    - PUBLIC_READ / PUBLIC_DOWNLOAD: Cho phép đọc trực tuyến dưới dạng stream nhị phân (inline).
+  * GET /api/books/:id/files/:fileId/download:
+    - PRIVATE: Chỉ tác giả hoặc ADMIN mới được tải file gốc.
+    - PUBLIC_READ: Chặn tải file gốc đối với độc giả thông thường (HTTP 403, báo lỗi chỉ cho phép đọc trực tuyến).
+    - PUBLIC_DOWNLOAD: Cho phép tải file gốc về máy dưới dạng attachment.
+- Luồng tính và đối soát SHA-256:
+  1. Tại Frontend trang Verify (/verify): Người dùng chọn tệp cục bộ bất kỳ. Trình duyệt tính mã băm
+     SHA-256 tức thì bằng Web Crypto API (SubtleCrypto.digest) từ byte thực tế của tệp.
+  2. Gửi mã băm lên Backend GET /api/books/verify-hash/:hash để tra cứu trên Sổ cái CSDL SQL Server.
+  3. Nếu tìm thấy tệp, trang Verify gọi tiếp endpoint GET /api/books/:bookId/files/:fileId/verify
+     để máy chủ đọc lại byte tệp lưu trữ trên đĩa và so khớp SHA-256 thực tế, trả về kết quả đối soát toàn vẹn.
+
+8. CÁCH CHẠY VÀ KIỂM THỬ DỰ ÁN
+- Chạy cả Frontend và Backend:
+    npm run dev:all
+- Chạy độc lập từng terminal:
+    Terminal 1 (Backend API):  npm run server
+    Terminal 2 (Frontend UI):  npm run dev
+- Chạy bộ kiểm thử tự động toàn diện (54/54 tests):
+    npm run test
+- Chạy kiểm tra linter (Oxlint):
+    npm run lint
+- Build kiểm tra biên dịch (TypeScript + Vite):
+    npm run build
+- Chạy migration CSDL (MỚI BƯỚC 02.1):
+    npm run db:migrate
+- Bootstrap quản trị viên ADMIN đầu tiên (MỚI BƯỚC 02.1):
+    npm run bootstrap:admin -- <email_nguoi_dung>
+- Seed dữ liệu sách mẫu (nếu cần):
+    npx tsx server/db/seedBooks.ts
+
+================================================================================
+BƯỚC 02.1 — ADMIN BOOTSTRAP & AUTHOR INVITATION SYSTEM
+================================================================================
+
+1. NGUYÊN TẮC PHÂN QUYỀN RBAC (READER / AUTHOR / ADMIN)
+- READER (Mặc định khi đăng ký mới):
+  * Được phép: Đăng nhập/đăng xuất, xem danh mục sách, đọc trực tuyến sách công khai, cập nhật hồ sơ cá nhân.
+  * Được phép: Nhập mã mời tác giả hợp lệ để nâng quyền lên AUTHOR.
+  * Không được phép: Tạo/sửa sách, tải lên bản thảo tác giả, tạo mã mời hoặc truy cập các API / trang quản trị.
+- AUTHOR (Được cấp sau khi nhập mã mời hợp lệ):
+  * Sở hữu đầy đủ quyền của READER.
+  * Được phép: Tạo và quản lý tác phẩm của chính mình, thêm đồng tác giả, tải lên các phiên bản file, hoàn thiện bút danh tác giả.
+  * Không được phép: Tạo mã mời, thu hồi mã mời hoặc truy cập API quản trị.
+- ADMIN (Quản trị viên nền tảng):
+  * Khởi tạo thông qua lệnh CLI có kiểm soát, KHÔNG có endpoint đăng ký công khai.
+  * Được phép: Truy cập Admin Dashboard (/admin), xem danh sách mã mời, tạo mã mời tác giả mới, thu hồi mã mời, giám sát số lượt sử dụng.
+
+2. CƠ CHẾ BOOTSTRAP ADMIN AN TOÀN
+- File thực thi: `server/scripts/bootstrapAdmin.ts` (Script CLI chạy thủ công, không tự động chạy khi khởi động server).
+- Lệnh chạy:
+    npm run bootstrap:admin -- <email>
+- Cơ chế bảo mật:
+  * Kiểm tra vai trò ADMIN tồn tại trong dbo.Roles.
+  * Tìm tài khoản người dùng theo email chuẩn hóa (trim, lowercase).
+  * Nếu tài khoản đã có vai trò ADMIN: Báo thông tin an toàn, thoát không ghi trùng (Idempotent).
+  * Nếu chưa có vai trò: Mở transaction gán bản ghi vào dbo.UserRoles.
+  * Không hardcode mật khẩu, không in session token hay secret nhạy cảm ra màn hình.
+  * Tài khoản ADMIN đầu tiên đã được xác minh trên local: minhtri@bookchain.io.
+
+3. HỆ THỐNG MÃ MỜI TÁC GIẢ (AUTHOR INVITATION SYSTEM)
+- Sinh mã an toàn bằng CSPRNG (Node.js crypto.randomBytes):
+  * Định dạng: BKC-XXXX-YYYY-ZZZZ (Ví dụ: BKC-A1B2-C3D4-E5F6).
+  * Độ khó đoán cao, chống brute-force.
+- Lưu trữ an toàn bằng mã băm SHA-256 (CodeHash CHAR(64)):
+  * CSDL KHÔNG lưu chuỗi mã gốc.
+  * Khi tạo mã thành công, chuỗi mã gốc chỉ được trả về một lần duy nhất trong phản hồi JSON để Admin sao chép.
+  * Danh sách mã mời (/api/admin/invitations) chỉ hiển thị thời hạn, số lượt đã dùng, tối đa và trạng thái, tuyệt đối không lộ CodeHash hay mã gốc.
+- Cơ chế chống vượt lượt (Concurrency Control):
+  * Sử dụng SQL Server Transaction với khóa dòng (UPDLOCK, ROWLOCK) trên bảng dbo.AuthorInvitations.
+  * Kiểm tra đồng thời: Status = 'ACTIVE', ExpiresAt > GETDATE(), UsedCount < MaxUses.
+  * Nếu đạt điều kiện: Tăng UsedCount, nếu UsedCount = MaxUses thì cập nhật Status = 'EXHAUSTED'.
+  * Ghi bản ghi kiểm toán vào dbo.InvitationUses (UserId, UsedAt, IpAddress, UserAgent).
+  * Cấp vai trò AUTHOR cho người dùng trong dbo.UserRoles (nếu người dùng chưa có vai trò AUTHOR).
+  * Nếu người dùng đã là AUTHOR: Từ chối đổi mã, không tiêu thụ lượt sử dụng.
+  * Nếu người dùng là ADMIN: Đổi mã an toàn, giữ nguyên vai trò ADMIN không bị hạ cấp.
+
+4. BẢNG DỮ LIỆU CSDL MỚI (MIGRATION: 001_create_invitations.sql)
+- `dbo.AuthorInvitations`:
+  * InvitationId (UNIQUEIDENTIFIER, PK)
+  * CodeHash (CHAR(64), UNIQUE, NOT NULL)
+  * CreatedByUserId (UNIQUEIDENTIFIER, FK -> Users)
+  * ExpiresAt (DATETIME2, NOT NULL)
+  * MaxUses (INT, NOT NULL, DEFAULT 1)
+  * UsedCount (INT, NOT NULL, DEFAULT 0)
+  * Status (NVARCHAR(20), NOT NULL, DEFAULT 'ACTIVE': ACTIVE, REVOKED, EXPIRED, EXHAUSTED)
+  * RevokedAt (DATETIME2, NULL)
+  * RevokedByUserId (UNIQUEIDENTIFIER, FK -> Users, NULL)
+  * Note (NVARCHAR(255), NULL)
+  * CreatedAt (DATETIME2, NOT NULL)
+- `dbo.InvitationUses`:
+  * InvitationUseId (UNIQUEIDENTIFIER, PK)
+  * InvitationId (UNIQUEIDENTIFIER, FK -> AuthorInvitations)
+  * UserId (UNIQUEIDENTIFIER, FK -> Users)
+  * UsedAt (DATETIME2, NOT NULL)
+  * IpAddress (NVARCHAR(45), NULL)
+  * UserAgent (NVARCHAR(255), NULL)
+
+5. CÁC API HOÀN THIỆN TRONG BƯỚC 02.1
+- Quản trị viên (Admin Only - yêu cầu authenticateToken + requireRole('ADMIN')):
+  * GET   /api/admin/invitations             - Lấy danh sách mã mời tác giả (phân trang, thống kê tổng số)
+  * POST  /api/admin/invitations             - Tạo mã mời mới (trả về mã gốc duy nhất lần này)
+  * PATCH /api/admin/invitations/:id/revoke  - Thu hồi mã mời còn hiệu lực
+- Người dùng (Độc giả - yêu cầu authenticateToken):
+  * POST  /api/invitations/redeem            - Nhập mã mời, đổi lấy quyền tác giả AUTHOR
+
+6. GIAO DIỆN NGƯỜI DÙNG (FRONTEND)
+- Giao diện Admin Dashboard (/admin):
+  * Thẻ tổng quan số lượng mã mời, trạng thái hệ thống.
+  * Biểu mẫu tạo mã mời với tùy chọn thời hạn (7, 14, 30, 90, 180, 365 ngày), số lượt sử dụng tối đa và ghi chú.
+  * Hộp thoại hiển thị mã mời vừa tạo kèm nút "Sao chép mã" an toàn.
+  * Bảng danh sách mã mời với huy hiệu trạng thái (Đang hiệu lực, Đã thu hồi, Hết hạn, Hết lượt), nút Thu hồi có xác nhận an toàn.
+  * Bảo vệ giao diện: Điều hướng về /login hoặc từ chối truy cập nếu không phải ADMIN.
+- Trang Hồ sơ cá nhân (/profile):
+  * Người dùng READER: Hiển thị hộp "Trở thành tác giả" cho phép nhập mã mời để nâng quyền.
+  * Sau khi đổi thành công: Tự động refreshUser() từ /api/auth/me, lập tức cập nhật vai trò sang AUTHOR và mở khóa khu vực quản lý bút danh / tác phẩm.
+  * Người dùng AUTHOR: Hiển thị thông tin hồ sơ tác giả đã kích hoạt.
+  * Người dùng ADMIN: Hiển thị huy hiệu ADMIN và liên kết nhanh đến Bảng điều khiển Quản trị.
+- Thanh điều hướng (Navbar):
+  * Hiển thị biểu tượng và liên kết Quản trị (/admin) khi tài khoản sở hữu vai trò ADMIN.
+  * Hỗ trợ đầy đủ song ngữ Tiếng Việt (VI) và Tiếng Anh (EN), tương thích chế độ Giao diện Sáng/Tối.
+
+================================================================================
+BƯỚC 03 — SMART CONTRACT & BLOCKCHAIN COPYRIGHT REGISTRY
+================================================================================
+
+1. NGUYÊN TẮC KIẾN TRÚC & PHÂN TÁCH DỮ LIỆU
+- Triết lý: "Library First, Copyright Second, Blockchain Underneath".
+- SQL Server quản lý toàn bộ dữ liệu nghiệp vụ: sách, tác giả, file nhị phân, quyền đọc/tải, lịch sử phiên bản.
+- Blockchain (Ethereum Sepolia / Hardhat Local) lưu trữ chứng cứ bất biến:
+  * RecordId (bytes32): Định danh duy nhất của bản ghi bản quyền.
+  * BookId (bytes32): Định danh tác phẩm.
+  * VersionNumber (uint32): Số thứ tự phiên bản sách (1, 2, 3...).
+  * ContentHash (bytes32): Mã băm SHA-256 từ byte nội dung thực của tệp (Node.js crypto).
+  * AuthorWallet (address): Ví tác giả sở hữu.
+  * Registrant (address): Ví thực hiện giao dịch ghi nhận (REGISTRAR_ROLE).
+  * RegisteredAt (uint64): Thời điểm khối xác nhận giao dịch.
+  * Status (enum): ACTIVE (0), DISPUTED (1), REVOKED (2).
+  * MetadataUri (string): Tham chiếu siêu dữ liệu (IPFS CID hoặc URI canonical).
+- Nội dung sách TUYỆT ĐỐI KHÔNG đưa lên blockchain.
+
+2. SMART CONTRACT: BookCopyrightRegistry.sol
+- Framework: Hardhat 2.29.1, Solidity 0.8.28, OpenZeppelin Contracts v5.6.1.
+- Bảo mật:
+  * Kế thừa OpenZeppelin AccessControl và Pausable.
+  * DEFAULT_ADMIN_ROLE: Cấp/thu hồi quyền, xử lý tranh chấp (dispute), thu hồi (revoke), tạm dừng khẩn cấp (pause/unpause).
+  * REGISTRAR_ROLE: Quyền ghi nhận bản ghi mới (registerCopyright).
+  * Custom Errors tiết kiệm gas: InvalidRecordId, InvalidBookId, InvalidVersionNumber, InvalidContentHash,
+    RecordAlreadyExists, HashAlreadyRegistered, VersionAlreadyRegistered, RecordNotFound, HashNotRegistered,
+    RecordAlreadyRevoked, InvalidStatusTransition, EmptyReasonRequired.
+  * Ngăn chặn đăng ký trùng: Chặn trùng recordId, chặn trùng contentHash (ở bất kỳ sách/bản ghi nào),
+    chặn trùng versionNumber trên cùng một bookId.
+  * Quản lý đa phiên bản: Phiên bản 1 và phiên bản 2 cùng tồn tại độc lập, không ghi đè mã băm của nhau.
+  * Tra cứu công khai an toàn: Hàm verifyHash(contentHash) trả về đầy đủ thông tin hoặc exists=false mà không revert.
+
+3. TIỆN ÍCH MẬT MÃ VÀ CHUẨN HÓA SHA-256 (TYPESCRIPT <-> SOLIDITY)
+- SHA-256 thực tế từ byte nội dung tệp (64 hex characters) được chuẩn hóa sang Solidity bytes32:
+  * TypeScript: sha256ToBytes32(hex) => "0x" + clean_64_hex_lowercase (32 bytes).
+  * Ngược lại: bytes32ToSha256(bytes32) => 64_hex_lowercase.
+  * UUID chuyển sang bytes32: uuidToBytes32(uuid) => "0x" + 32_zeros + clean_32_hex.
+- Đảm bảo tính nhất quán byte-for-byte 100% giữa Node.js crypto và Solidity bytes32.
+
+4. CÁC LỆNH VẬN HÀNH VÀ KIỂM THỬ BLOCKCHAIN
+- Biên dịch Smart Contract:
+    npm run contracts:compile
+- Chạy toàn bộ 29 Unit Tests Smart Contract (Hardhat Mocha):
+    npm run contracts:test
+- Chạy toàn bộ 61 Tests hệ thống (Vitest):
+    npm run test
+- Khởi chạy local JSON-RPC blockchain node (nếu cần):
+    npm run contracts:node
+- Triển khai lên Local Hardhat Network:
+    npm run contracts:deploy:local
+- Triển khai thử nghiệm tương tác đầy đủ:
+    npx hardhat run scripts/interact.cjs --network hardhat
+- Triển khai lên Ethereum Sepolia (khi có RPC và ví có ETH testnet):
+    npm run contracts:deploy:sepolia
+
+5. THÔNG TIN TRIỂN KHAI THỰC TẾ
+- Môi trường Local (Hardhat Node http://127.0.0.1:8545):
+  * Contract Address : 0x5FbDB2315678afecb367f032d93F642f64180aa3
+  * Deployer Address : 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+  * Chain ID         : 31337 (Hex: 0x7a69)
+  * Transaction Hash : 0x23a71c80d6f2b169922fca125ff2b1d5e0c6198110aee6d12511598a8276a1ed
+  * Block Number     : 1
+  * Bytecode Size    : 14,494 hex chars (Xác minh mã máy hoạt động 100%)
+- Môi trường Sepolia Testnet:
+  * Trạng thái: Sẵn sàng cấu hình mạng và mã nguồn triển khai; chưa thực hiện giao dịch broadcast
+    lên testnet do môi trường hiện tại chưa có biến môi trường SEPOLIA_RPC_URL và SEPOLIA_PRIVATE_KEY
+    có số dư ETH Sepolia.
+
+6. PHÂN HỆ KẾT NỐI VÍ METAMASK (WALLET CONNECTION SYSTEM)
+- Kiến trúc State: Tích hợp WalletContext (src/contexts/WalletContext.tsx) và WalletButton (src/components/layout/WalletButton.tsx).
+- Xử lý tương tác an toàn:
+  * Không tự động bật popup kết nối khi người dùng mở trang.
+  * Khi nhấn nút "Kết nối ví": Gọi window.ethereum.request({ method: 'eth_requestAccounts' }).
+  * Bắt lỗi người dùng hủy (code 4001) hoặc yêu cầu đang chờ (code -32002) mà không làm crash ứng dụng.
+  * Hiển thị thông báo khi chưa cài MetaMask.
+- Nhận biết sự kiện mạng & tài khoản:
+  * accountsChanged: Cập nhật tài khoản mới hoặc chuyển về trạng thái ngắt kết nối khi khóa ví.
+  * chainChanged: Tự động phát hiện sai mạng (khác Chain ID 31337).
+  * Chuyển mạng tự động (switchNetwork): Tự động yêu cầu chuyển sang Hardhat Local (0x7a69) qua
+    wallet_switchEthereumChain và wallet_addEthereumChain nếu ví chưa cấu hình mạng này.
+- Xác minh Smart Contract trực tiếp từ giao diện:
+  * Tự động kiểm tra mã bytecode (eth_getCode) tại địa chỉ 0x5FbDB2315678afecb367f032d93F642f64180aa3.
+  * Đọc dữ liệu thực tế (contract.totalRecords()) từ smart contract để hiển thị trạng thái "Đã xác minh trên node Local".
+
+================================================================================
+BƯỚC 04 — TÍCH HỢP BLOCKCHAIN VÀO BOOKCHAIN LIBRARY (COMPLETED)
+================================================================================
+
+1. TỔNG QUAN KIẾN TRÚC SAU TÍCH HỢP BƯỚC 04
+- Triết lý kiến trúc tiếp tục được bảo toàn tuyệt đối:
+  "Library First, Copyright Second, Blockchain Underneath".
+- Off-chain (SQL Server `BookChainLibrary`):
+  * `dbo.CopyrightRecords`: Quản lý định danh bản quyền, mã nghiệp vụ `RecordNumber` (BCR-YYYYMMDD-XXXX),
+    liên kết `BookId` và `BookFileId`, `ClaimStatement`, `RecordStatus` ('QUEUED', 'ON_CHAIN', 'FAILED'...).
+  * `dbo.BlockchainTransactions`: Quản lý biên lai giao dịch on-chain, `TxHash` (VARCHAR(66)), `ChainId` (31337),
+    `ContractAddress` (VARCHAR(42)), `Status` ('QUEUED', 'PENDING', 'CONFIRMED', 'FAILED'), `BlockNumber`, `ConfirmedAt`.
+- On-chain (Hardhat Local Node `http://127.0.0.1:8545` / Chain ID `31337`):
+  * Smart Contract: `BookCopyrightRegistry.sol` (Địa chỉ: `0x5FbDB2315678afecb367f032d93F642f64180aa3`).
+  * Lưu trữ bất biến: `RecordId` (bytes32), `BookId` (bytes32), `VersionNumber` (uint32), `ContentHash` (bytes32 SHA-256 từ byte tệp),
+    `AuthorWallet` (address), `Registrant` (address), `RegisteredAt` (uint64 block timestamp), `Status` (enum ACTIVE, DISPUTED, REVOKED).
+
+2. LUỒNG NGHIỆP VỤ ĐĂNG KÝ BẢN QUYỀN (TWO SECURE EXECUTION PATHS)
+- Kiểm tra điều kiện tiên quyết:
+  * Người dùng đăng nhập hệ thống.
+  * Người dùng phải là tác giả (`PRIMARY_AUTHOR` hoặc `CO_AUTHOR`) của cuốn sách hoặc có quyền `ADMIN`.
+  * Tệp phiên bản sách phải tồn tại trên đĩa lưu trữ và vượt qua kiểm tra toàn vẹn băm byte vật lý `Node.js crypto SHA-256`.
+- Bước 1 (Chuẩn bị tham số - `POST /api/copyright/prepare`):
+  * Backend xác thực quyền sở hữu của tác giả.
+  * Kiểm tra xem mã băm hoặc cặp `(BookId, VersionNumber)` đã tồn tại on-chain chưa qua `contract.verifyHash()`.
+  * Khởi tạo bản ghi `dbo.CopyrightRecords` (`QUEUED`) và `dbo.BlockchainTransactions` (`QUEUED`).
+  * Trả về các tham số chuẩn hóa cho contract: `recordIdBytes32`, `bookIdBytes32`, `versionNumber`, `contentHashBytes32`,
+    `authorWallet`, `metadataUri`, `contractAddress`, `chainId` (31337).
+- Bước 2 (Ký và phát sóng giao dịch):
+  * Nhánh A (Tác giả ký trực tiếp qua MetaMask khi ví có `REGISTRAR_ROLE` - ví dụ Hardhat Account #0):
+    - Frontend gọi `contract.registerCopyright(...)` thông qua `ethers.BrowserProvider(window.ethereum).getSigner()`.
+    - Người dùng duyệt và ký giao dịch trên giao diện MetaMask.
+    - Frontend lắng nghe `tx.wait(1)` để nhận biên lai xác nhận.
+  * Nhánh B (Tác giả kết nối ví không có `REGISTRAR_ROLE`):
+    - Giao diện giải thích rõ ràng lý do phân quyền và cung cấp 2 giải pháp an toàn:
+      (1) Đổi sang tài khoản Registrar trong MetaMask để tự ký, HOẶC
+      (2) Nhấn nút "Ủy quyền Registrar Relay phát sóng" (`POST /api/copyright/relay`) để tài khoản Registrar
+          của hệ thống phát sóng thay mặt tác giả; địa chỉ ví tác giả vẫn được ghi vĩnh viễn vào trường `authorWallet`.
+- Bước 3 (Đồng bộ Blockchain & SQL Server - `POST /api/copyright/sync`):
+  * Backend nhận `txHash`, dùng JSON-RPC tra cứu `provider.getTransactionReceipt(txHash)`.
+  * Đọc lại bản ghi từ smart contract để xác minh bằng chứng on-chain thực tế.
+  * Cập nhật `dbo.BlockchainTransactions`: `Status = 'CONFIRMED'`, `BlockNumber`, `ConfirmedAt`.
+  * Cập nhật `dbo.CopyrightRecords`: `RecordStatus = 'ON_CHAIN'`.
+
+3. LUỒNG XÁC MINH BẢN QUYỀN TRỰC TIẾP ON-CHAIN (`/verify` & `GET /api/copyright/verify/:query`)
+- Hỗ trợ 2 chế độ tra cứu trực tiếp:
+  * Chế độ 1 (Tệp tin): Người dùng chọn/kéo thả bất kỳ tệp sách nào -> Trình duyệt tính toán mã băm SHA-256 nhị phân qua Web Crypto API -> Tra cứu trực tiếp trên Smart Contract và CSDL.
+  * Chế độ 2 (Mã băm SHA-256 hoặc Record ID): Nhập chuỗi băm 64 ký tự hex hoặc mã định danh UUID -> Hệ thống gọi `contract.verifyHash()` hoặc `contract.getCopyright()`.
+- Chứng chỉ bản quyền điện tử (Archival Certificate):
+  * Hiển thị trạng thái on-chain thời gian thực: `ACTIVE` (Hợp lệ), `DISPUTED` (Tranh chấp), `REVOKED` (Thu hồi).
+  * Đối soát tính nhất quán 100% giữa nội dung tệp lưu trữ và dấu vân tay trên blockchain.
+  * Hiển thị đầy đủ: Record ID, Mã băm SHA-256, Ví tác giả, Ví người ghi, Số khối, Mốc thời gian khối và liên kết tới tác phẩm trong thư viện.
+
+4. HƯỚNG DẪN KHỞI CHẠY VÀ VẬN HÀNH DỰ ÁN
+- Khởi chạy Blockchain Node cục bộ:
+    npm run contracts:node (chạy trên cổng 8545, Chain ID: 31337)
+- Triển khai Smart Contract lên node local (nếu vừa khởi động lại node):
+    npm run contracts:deploy:local
+- Chạy toàn bộ hệ thống (Frontend + Backend):
+    npm run dev:all  (Client: http://localhost:5173, Server: http://localhost:5000)
+- Kiểm tra CSDL SQL Server:
+    SELECT * FROM dbo.CopyrightRecords;
+    SELECT * FROM dbo.BlockchainTransactions;
+- Chạy toàn bộ bộ kiểm thử tự động:
+    npm run test           # Chạy toàn bộ 84 bài kiểm thử tích hợp (Vitest)
+    npm run contracts:test # Chạy 29 bài kiểm thử Smart Contract (Hardhat)
+    npm run lint           # Kiểm tra mã nguồn (Oxlint)
+    npm run build          # Đóng gói sản phẩm (Vite + TypeScript)
+
+================================================================================
+BƯỚC 05 — QUẢN LÝ TRANH CHẤP BẢN QUYỀN & QUẢN TRỊ SMART CONTRACT (COMPLETED)
+================================================================================
+
+1. TỔNG QUAN PHẠM VI BƯỚC 05 HOÀN THIỆN
+- Quản lý Khiếu nại Bản quyền (Dispute & Infringement Reporting):
+  * Bạn đọc (READER, AUTHOR, ADMIN) có thể gửi khiếu nại bản quyền đối với sách hoặc hồ sơ bản quyền on-chain.
+  * Phân loại lý do vi phạm rõ ràng: Đạo văn/sao chép (PLAGIARISM), Phát hành không phép (UNLICENSED_DISTRIBUTION),
+    Mạo danh tác giả (IMPERSONATION), Dấu vân tay giả mạo (FRAUDULENT_HASH), Sai lệch metadata (INACCURATE_METADATA), Khác (OTHER).
+  * Kiểm tra tính hợp lệ đầu vào: Tối thiểu 10 ký tự mô tả/bằng chứng, kiểm tra đối tượng đích tồn tại, yêu cầu đăng nhập.
+- Sổ cái Lưu trữ & Kiểm toán (SQL Server `BookChainLibrary`):
+  * `dbo.Reports`: Quản lý hồ sơ khiếu nại, trạng thái (`SUBMITTED`, `UNDER_REVIEW`, `ACTION_TAKEN`, `REJECTED`),
+    người khiếu nại, tệp đối chiếu, mốc thời gian.
+  * `dbo.ReportActions`: Lưu trữ tiến trình xử lý minh bạch (Audit Trail timeline) gồm: đổi trạng thái, thêm ghi chú nội bộ,
+    kích hoạt tranh chấp on-chain, giải quyết tranh chấp on-chain, và thu hồi bản quyền on-chain kèm TxHash.
+- Tương tác Vòng đời Tranh chấp Trên Smart Contract (`BookCopyrightRegistry.sol`):
+  * `disputeCopyright(bytes32 recordId, string reason)`: Kích hoạt trạng thái DISPUTED khi có khiếu nại hợp lệ.
+  * `resolveDispute(bytes32 recordId, RecordStatus newStatus, string resolutionNote)`: Phán quyết giải quyết tranh chấp:
+    hoàn nguyên về ACTIVE hoặc chuyển thành REVOKED.
+  * `revokeCopyright(bytes32 recordId, string reason)`: Thu hồi trực tiếp từ trạng thái ACTIVE khi có vi phạm nghiêm trọng.
+  * Đồng bộ tự động 2 chiều: Khi trạng thái hợp đồng thay đổi, hệ thống cập nhật `dbo.CopyrightRecords.RecordStatus`
+    tương ứng (`DISPUTED`, `ON_CHAIN`, `WITHDRAWN`) và ghi nhận biên lai giao dịch vào `dbo.BlockchainTransactions`.
+- Cầu dao Khẩn cấp (Emergency Circuit Breaker / Pausable):
+  * Quản trị viên nền tảng (Admin) có quyền bật/tắt tạm dừng đăng ký mới trên Smart Contract thông qua `pause()` và `unpause()`.
+  * Khi đang tạm dừng (Paused), mọi yêu cầu đăng ký bản quyền mới đều bị Smart Contract từ chối với lỗi `EnforcedPause()`.
+- Giao diện Quản trị & Hiển thị Cảnh báo Trực quan:
+  * Admin Dashboard (`/admin`): Thiết kế 3 tab điều hành chuyên nghiệp:
+    (1) `INVITATIONS`: Quản lý và cấp phát mã mời tác giả mật mã.
+    (2) `DISPUTES`: Danh sách khiếu nại, bộ lọc trạng thái, chi tiết bằng chứng, nhật ký xử lý (timeline),
+        thêm ghi chú nội bộ, và nút thao tác on-chain trực tiếp (Kích hoạt Tranh chấp, Giải quyết Khôi phục, Thu hồi Vĩnh viễn).
+    (3) `GOVERNANCE`: Tra cứu thông tin hợp đồng on-chain, trạng thái kết nối node, và công tắc Cầu dao khẩn cấp (Pause / Unpause).
+  * Chi tiết Sách (`/book/:id`): Hiển thị cảnh báo màu hổ phách khi có tranh chấp (DISPUTED) hoặc màu đỏ khi đã bị thu hồi (REVOKED);
+    tích hợp nút "Khiếu nại bản quyền" cho bạn đọc.
+  * Xác minh Bản quyền (`/verify`): Cập nhật huy hiệu trạng thái on-chain thời gian thực (ACTIVE, DISPUTED, REVOKED).
+
+2. HƯỚNG DẪN VẬN HÀNH VÀ KIỂM THỬ THỰC TẾ
+- Khởi chạy Blockchain Node Hardhat:
+    npm run contracts:node (Node cục bộ tại http://127.0.0.1:8545, Chain ID: 31337)
+- Triển khai Contract lên Local Node:
+    npm run contracts:deploy:local (Địa chỉ: 0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44)
+- Chạy hệ thống Website & Server API:
+    npm run dev:all (Frontend: http://localhost:5173, Backend: http://localhost:5000)
+- Kiểm tra toàn bộ 102 bài test hệ thống:
+    npm test (Vitest: 7/7 test suites PASSED, 102/102 tests PASSED)
+- Kiểm tra toàn bộ 29 bài test hợp đồng:
+    npm run contracts:test (Hardhat: 29/29 tests PASSED)
+- Kiểm tra quy chuẩn mã nguồn:
+    npm run lint (0 errors)
+- Đóng gói sản phẩm:
+    npm run build (TypeScript check + Vite production bundle thành công)
+
+3. CẤU HÌNH VÀ GIỚI HẠN HIỆN TẠI
+- Môi trường thử nghiệm cục bộ đang sử dụng tài khoản Hardhat Account #0 (0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266)
+  làm DEFAULT_ADMIN_ROLE và REGISTRAR_ROLE cho cả việc đăng ký bản quyền và quản trị tranh chấp.
+- Mạng Ethereum Sepolia Testnet và IPFS Storage: Đã sẵn sàng kiến trúc và mã nguồn; chưa kích hoạt giao dịch broadcast ra mạng công khai
+  do môi trường hiện tại không cấu hình SEPOLIA_RPC_URL, khóa bí mật có số dư Sepolia ETH thật và IPFS API credentials.
+
+================================================================================
+HOÀN THIỆN TOÀN BỘ LỘ TRÌNH 5 GIAI ĐOẠN & CHUẨN BỊ SEPOLIA (PRODUCTION-READY)
+================================================================================
+
+1. CÁC TÍNH NĂNG VÀ KIẾN TRÚC MỞ RỘNG TOÀN DIỆN
+- Động cơ Lưu trữ IPFS Thực tế (IPFS Storage Engine):
+  * `server/services/storage/ipfsStorageProvider.ts`: Tính toán mã băm IPFS CIDv0 chuẩn hóa (`Qm...`, multihash SHA2-256 + Base58).
+  * Bộ điều phối `StorageManager` (`server/services/storage/storageManager.ts`): Cho phép chọn `LOCAL` hoặc `IPFS` linh hoạt
+    khi tải tệp lên hoặc thông qua biến môi trường `STORAGE_DRIVER=ipfs`.
+  * Quản lý bộ đệm IPFS persistent tại `storage/ipfs/` đảm bảo tính khả dụng ngay cả khi offline, hỗ trợ gateway và Pinata API.
+- Cơ chế Phục hồi & Đối soát Giao dịch (Reconciliation Mechanism):
+  * Hàm `reconcilePendingTransactions()` trong `copyrightService.ts` và endpoint `POST /api/copyright/reconcile`.
+  * Quét toàn bộ giao dịch đang ở trạng thái `QUEUED` / `PENDING`, đối chiếu biên lai on-chain và hàm `verifyHash` của smart contract
+    để tự động khắc phục tình huống giao dịch đã broadcast nhưng CSDL chưa kịp đồng bộ do đứt mạng hoặc timeout.
+- Phân biệt Rõ ràng Giao dịch Trực tiếp và Relay Signer:
+  * Người dùng ký trực tiếp qua MetaMask: Ghi nhận `TransactionType = 'REGISTER_DIRECT_METAMASK'`.
+  * Server Registrar ký thay mặt: Ghi nhận `TransactionType = 'REGISTER_RELAY_SIGNER'`, ví tác giả vẫn được ghi chính xác on-chain.
+- Hỗ trợ Đa mạng Song song (Multi-network Architecture):
+  * `WalletContext.tsx` tự động hỗ trợ cả Hardhat Local (Chain ID: 31337) và Ethereum Sepolia (Chain ID: 11155111).
+  * Hàm `switchNetwork('hardhat' | 'sepolia')` cho phép chuyển mạng mượt mà.
+  * Tách biệt rõ ràng địa chỉ contract giữa Local (`deployedAddresses.localhost`) và Sepolia (`deployedAddresses.sepolia`).
+- Kịch bản Quản trị Phân quyền Smart Contract:
+  * Script `scripts/grantRole.cjs` hỗ trợ cấp vai trò `REGISTRAR_ROLE` cho bất kỳ địa chỉ ví nào trên Local hoặc Sepolia.
+  * Đã kiểm chứng thực tế tại Block 78 trên node Local, đảm bảo tính idempotent 100%.
+
+2. TỔNG KẾT KẾT QUẢ KIỂM THỬ THỰC TẾ
+- Vitest Integration Suites : 8/8 test files PASSED, 110/110 tests PASSED (100%)
+- Hardhat Contract Suites   : 29/29 tests PASSED (100%)
+- Quy chuẩn mã nguồn (Lint)  : Oxlint 0 errors
+- Đóng gói sản phẩm (Build) : TypeScript compile (`tsc -b`) & Vite build thành công trong 580ms (0 errors)
+- Báo cáo Nghiệm thu Roadmap: ROADMAP_ACCEPTANCE_REPORT.txt (PASS 100% 5 giai đoạn)
+- Báo cáo Kỹ thuật Sepolia   : SEPOLIA_DEPLOYMENT_REPORT.txt (Trạng thái: PREPARED)
+================================================================================
+
+================================================================================
+BẢO TRÌ & SỬA LỖI: QUY TRÌNH DUYỆT BÚT DANH TÁC GIẢ (STEP 07 - AUTHOR APPROVAL)
+================================================================================
+
+1. NGUYÊN NHÂN GỐC RỄ (ROOT CAUSES IDENTIFIED)
+- CSDL `dbo.AuthorProfiles` đã có sẵn các cột `VerificationStatus`, `VerificationNote`, `ReviewedByUserId`, `ReviewedAt`,
+  nhưng phía backend thiếu hoàn toàn API endpoint cho Admin để truy vấn, phê duyệt hoặc từ chối các yêu cầu này.
+- Giao diện Admin (`src/pages/AdminDashboard.tsx`) trước đây chỉ có 3 tab (`INVITATIONS`, `DISPUTES`, `GOVERNANCE`),
+  không có tab hay bảng danh sách nào để Admin xem xét các tác giả đang ở trạng thái `PENDING`.
+- Phía backend `bookService.createBook` trước đây chỉ kiểm tra sự tồn tại của hồ sơ mà không kiểm tra trạng thái `REJECTED`,
+  dẫn đến nguy cơ tài khoản bị từ chối vẫn có thể đăng sách nếu không có cơ chế thu hồi vai trò `AUTHOR` và chặn tạo sách.
+- Phía trang cá nhân (`src/pages/Profile.tsx`), độc giả chưa có bút danh không nhìn thấy biểu mẫu đăng ký bút danh
+  (chỉ thấy ô đổi mã mời) và không hiển thị rõ ràng lý do từ chối hay đường dẫn gửi lại yêu cầu sau khi sửa đổi.
+
+2. CÁC THAY ĐỔI KIẾN TRÚC & MÃ NGUỒN HOÀN THIỆN
+- Backend Types & DTOs (`server/types/index.ts`):
+  * Thêm `AuthorRequestDto` và `AdminAuthorRequestsResult`.
+  * Bổ sung `verificationNote?: string | null` và `reviewedAt?: Date | null` vào `AuthorProfilePublic`.
+- Repository Layer (`server/repositories/authorProfileRepository.ts`):
+  * Hàm `getAuthorRequests()`: Tìm kiếm, lọc theo trạng thái (`ALL`, `PENDING`, `VERIFIED`, `REJECTED`), phân trang.
+  * Hàm `approveAuthorRequest()`: Sử dụng giao dịch SQL với khóa dòng `UPDLOCK, ROWLOCK`, kiểm tra trạng thái `PENDING` (chống duyệt lặp `REQUEST_ALREADY_PROCESSED`), cập nhật `VerificationStatus = 'VERIFIED'`, ghi nhận Admin kiểm toán, và gán vai trò `AUTHOR` vào `dbo.UserRoles`.
+  * Hàm `rejectAuthorRequest()`: Sử dụng giao dịch SQL với `UPDLOCK, ROWLOCK`, kiểm tra trạng thái `PENDING` (chống từ chối lặp), cập nhật `VerificationStatus = 'REJECTED'`, lưu lý do `VerificationNote`, và thu hồi vai trò `AUTHOR` nếu tài khoản không có quyền từ mã mời hợp lệ.
+  * Cập nhật `createOrUpdate()`: Cho phép tác giả cập nhật bút danh sau khi bị từ chối để đặt lại trạng thái về `PENDING`, xóa lý do cũ để Admin xem xét lại.
+- Backend Routes & Controllers (`server/routes/adminRoutes.ts`, `server/controllers/adminController.ts`):
+  * `GET /api/admin/author-requests`: Yêu cầu quyền `ADMIN`, hỗ trợ `status`, `search`, `page`, `limit`.
+  * `POST|PATCH /api/admin/author-requests/:id/approve`: Phê duyệt yêu cầu bút danh, hỗ trợ ghi chú kiểm toán.
+  * `POST|PATCH /api/admin/author-requests/:id/reject`: Từ chối yêu cầu bút danh, bắt buộc kèm lý do rõ ràng.
+- Chặn quyền đăng sách (`server/services/bookService.ts`, `server/controllers/bookController.ts`):
+  * Chặn tài khoản chưa có hồ sơ tác giả (`AUTHOR_PROFILE_REQUIRED`, 403).
+  * Chặn tài khoản bị từ chối bút danh (`AUTHOR_PROFILE_REJECTED`, 403 kèm lý do từ chối).
+  * Chặn tài khoản thiếu vai trò tác giả (`AUTHOR_ROLE_REQUIRED`, 403).
+- Frontend Admin Dashboard (`src/pages/AdminDashboard.tsx`):
+  * Bổ sung Tab `AUTHOR_REQUESTS` với huy hiệu (badge count) số lượng yêu cầu `PENDING`.
+  * 4 thẻ thống kê nhanh (Tổng số, Đang chờ, Đã duyệt, Đã từ chối).
+  * Bộ lọc trạng thái pill-buttons và thanh tìm kiếm từ khóa theo bút danh, email, tên hiển thị.
+  * Hộp thoại Modal Phê duyệt (nhập ghi chú tùy chọn) và Hộp thoại Modal Từ chối (nhập lý do bắt buộc).
+- Frontend Profile (`src/pages/Profile.tsx`):
+  * Hiển thị biểu mẫu đăng ký bút danh cho độc giả chưa có hồ sơ hoặc cho phép đổi mã mời.
+  * Hiển thị thẻ trạng thái hồ sơ sống động: `PENDING` (Chờ quản trị viên xét duyệt), `VERIFIED` (Đã được phê duyệt), `REJECTED` (Bị từ chối kèm lý do và nút chỉnh sửa để gửi lại).
+- Tích hợp Đa ngôn ngữ (`src/i18n/vi.ts`, `src/i18n/en.ts`): Bổ sung đầy đủ nhãn, thông báo và modal.
+
+3. KẾT QUẢ KIỂM THỬ THỰC TẾ
+- Bộ test mới: `tests/step07_author_approval.test.ts` (19/19 tests PASSED 100%).
+- Toàn bộ Vitest Suites: 9/9 files PASSED, 129/129 tests PASSED (100%).
+- Smart Contract Suites: 29/29 tests PASSED (100%).
+- Linting: 0 errors (132 warnings không nghiêm trọng).
+- Production Build: `tsc -b && vite build` thành công 100%.
+- Báo cáo chi tiết: `PEN_NAME_APPROVAL_FIX_REPORT.txt`.
+================================================================================
+
+================================================================================
+TỔNG RÀ SOÁT VÀ TÁI CẤU TRÚC TOÀN DIỆN — BUSINESS LOGIC, ARCHITECTURE & IMPECCABLE UI/UX
+(TRIẾT LÝ: LIBRARY FIRST, COPYRIGHT SECOND, BLOCKCHAIN UNDERNEATH)
+================================================================================
+1. HIỆN TRẠNG TRƯỚC RÀ SOÁT & NGUYÊN NHÂN
+- Nhãn "(Coming Soon)" giả tạo xuất hiện ở các trang chính: `/authors`, `/how-it-works`.
+- `/copyright/register` trỏ vào stepper giả lập `Register.tsx` với dữ liệu mock tĩnh không kết nối hệ thống thật.
+- Nút kết nối ví Web3 bị ép buộc trên thanh điều hướng cho mọi người đọc, gây hiểu nhầm sang dashboard giao dịch crypto.
+- Thiếu phân hệ Tổng quan trung tâm (Overview) trong Admin Console để giám sát live metrics.
+- Phát hiện khuyết tật CSS "side-tab" (border-left 3px) qua công cụ kiểm tra tự động của Impeccable (`ReportModal.css`).
+
+2. CÁC THAY ĐỔI KIẾN TRÚC & MÃ NGUỒN HOÀN THIỆN
+- Thiết kế điều hướng 3 khu vực chức năng rõ ràng (Three-Zone Navigation):
+  * Public Reader Zone: Trang chủ, Khám phá (`/discover`), Chi tiết tác phẩm (`/book/:id`), Danh mục tác giả thực tế (`/authors`), Kiến trúc & Cách thức hoạt động (`/how-it-works`), Xác minh tệp độc lập (`/verify`).
+  * Author Studio Zone (`/author/studio`): Không gian tác giả với 3 tab (Tác phẩm, Sổ cái bản quyền, Tranh chấp), banner trạng thái PENDING/VERIFIED/REJECTED, tạo sách, tải phiên bản, kiểm tra mã băm SHA-256, đăng ký bản quyền và đối soát.
+  * Admin Root Control Room (`/admin`): 5 phân hệ chuyên trách (Tổng quan OVERVIEW với 4 thẻ triage + sức khỏe hệ thống, Duyệt tác giả, Mã mời, Khiếu nại & tranh chấp, Smart Contract Governance).
+- Hiển thị Ngữ cảnh Ví Web3 (Contextual Wallet Rendering): Chỉ hiển thị nút kết nối ví khi người dùng là Tác giả, Quản trị viên hoặc đã kết nối ví trước đó.
+- Backend API mới:
+  * `GET /api/books/authors`: Truy vấn các tác giả đã được phê duyệt và số lượng tác phẩm xuất bản từ SQL Server.
+  * `GET /api/admin/overview`: Đếm số liệu sống trực tiếp từ cơ sở dữ liệu và giám sát Circuit Breaker.
+- Typography & Layout:
+  * Google Fonts `@import` bổ sung `&subset=vietnamese,latin-ext` cho Playfair Display, Cinzel, Outfit, JetBrains Mono.
+  * Lớp tiện ích `.prose-reading` giới hạn độ rộng đọc tối ưu 65-75ch.
+  * Sửa chữa khuyết tật `ReportModal.css` theo chuẩn Impeccable (0 defects).
+
+3. KẾT QUẢ KIỂM THỬ NGHIỆM THU
+- Impeccable Defect Detector: `[]` (0 khuyết tật).
+- Oxlint Linting: 0 errors (Passed).
+- TypeScript & Vite Production Build: `tsc -b && vite build` hoàn thành trong 871ms, 0 errors.
+- Vitest Integration Suites: 9/9 files, 129/129 tests PASSED (100%).
+- Hardhat Smart Contract Suites: 29/29 tests PASSED (100%).
+- Báo cáo toàn diện: `COMPREHENSIVE_REFACTOR_REPORT.txt` & `UI_UX_REFACTOR_REPORT.txt`.
+
+================================================================================
+BƯỚC 09: TOÀN DIỆN AUDIT, SỬA LỖI VÀ HOÀN THIỆN UI/UX
+================================================================================
+1. ĐÃ HOÀN TẤT:
+- Áp dụng các quy chuẩn Impeccable (`SKILL.md`, `PRODUCT.md`, `DESIGN.md`, `craft-floor.md`).
+- Loại bỏ hoàn toàn các kicker bị cấm (`ROOT CONTROL ROOM`, `AUTHOR STUDIO & COPYRIGHT DESK`).
+- Xây dựng hệ thống button đồng bộ (`.btn`, `.btn-sm`, `.btn-xs`, `.btn-icon`, focus-visible, line-height 1.25, white-space: nowrap).
+- Xây dựng Mobile Navigation Drawer trong `Navbar.tsx` & `Navbar.css` (giải quyết triệt để lỗi mất menu trên viewport < 992px).
+- Sửa thanh lọc pills và ô tìm kiếm (`.pills-group`, `.pill-btn`) chống dính chữ trên Admin Dashboard & Author Studio.
+- Đồng bộ design tokens và sửa lỗi thẻ trong suốt trong `AdminDashboard.css`.
+- Thêm điều hướng tắt từ Profile sang Author Studio hoàn chỉnh.
+- Xóa bỏ an toàn tệp thừa `src/App.css`.
+- Đã kiểm tra trực quan trên trình duyệt (390px Mobile và 1440px Desktop) thông qua `browser_subagent`.
+- Kiểm thử hồi quy: Lint 0 errors, Build 0 errors, Vitest 129/129 passed, Hardhat 29/29 passed, Impeccable detector 0 defects.
+================================================================================
+BƯỚC 10: RÀ SOÁT TÍNH NHẤT QUÁN VÀ BÀN GIAO DỰ ÁN (HANDOFF READY)
+================================================================================
+1. ĐÃ THỰC HIỆN KIỂM CHỨNG TOÀN DIỆN (AUDIT & VERIFICATION):
+- Môi trường thực tế: Node.js v24.19.0, npm 11.17.0, SQL Server 2025 RTM 17.0.1000.7 (Port 1433 OK).
+- Cơ sở dữ liệu: Đối chiếu 17 bảng dữ liệu đồng bộ giữa CSDL, DDL `BookChainLibrary_SQLServer.sql`
+  và migration `001_create_invitations.sql`.
+- Kiểm thử thực tế vừa chạy lại (100% Passed):
+  * Hardhat Smart Contract: 29/29 tests PASSED (6s).
+  * Vitest System Integration: 9/9 files, 129/129 tests PASSED (37.66s).
+  * Linter: Oxlint 0 errors (Passed).
+  * Build: `tsc -b && vite build` 0 errors (Passed trong 4.35s).
+- Hoàn thiện `.env.example`: Bổ sung toàn diện placeholders cho Storage (Local/IPFS),
+  Blockchain Local Node (Chain ID 31337), Sepolia Testnet, Relay Signer và Pinata.
+- Tạo mới bộ tài liệu bàn giao chuẩn kỹ thuật:
+  * `SETUP_GUIDE.txt`: Hướng dẫn cài đặt và vận hành 12 bước chi tiết bằng tiếng Việt.
+  * `HANDOFF_CHECKLIST.txt`: Danh mục kiểm tra những gì nên gửi và không nên gửi.
+  * `HANDOFF_READINESS_REPORT.txt`: Báo cáo đánh giá tính sẵn sàng bàn giao với bằng chứng thực nghiệm.
+2. TRẠNG THÁI CUỐI CÙNG:
+- Dự án sẵn sàng bàn giao toàn diện cho thành viên mới tiếp nhận và vận hành độc lập.
+================================================================================

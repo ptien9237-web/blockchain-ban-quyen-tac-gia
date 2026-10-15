@@ -1,0 +1,485 @@
+================================================================================
+HƯỚNG DẪN CÀI ĐẶT VÀ KHỞI CHẠY HỆ THỐNG BOOKCHAIN LIBRARY
+(SETUP & RUNTIME GUIDE DÀNH CHO THÀNH VIÊN DỰ ÁN MỚI)
+================================================================================
+Tài liệu hướng dẫn từng bước cấu hình máy trạm, cơ sở dữ liệu, smart contract và
+chạy toàn bộ các chức năng của BookChain Library từ trạng thái sạch (clean state).
+
+Phiên bản: 1.0 (Hoàn thiện sau 5 giai đoạn kiến trúc + Refactor UI/UX + Author Approval)
+Ngôn ngữ: Tiếng Việt
+Hệ điều hành tương thích: Windows 10/11 (hỗ trợ Linux / macOS với các lệnh shell tương đương)
+
+--------------------------------------------------------------------------------
+MỤC LỤC
+--------------------------------------------------------------------------------
+1.  Phần mềm và phiên bản yêu cầu
+2.  Tiếp nhận mã nguồn, mở terminal và cài đặt dependencies
+3.  Cấu hình biến môi trường (.env) từ .env.example
+4.  Cài đặt & cấu hình Microsoft SQL Server, tạo Database, Migration và Seed
+5.  Thiết lập tài khoản thử nghiệm và Bootstrap ADMIN an toàn
+6.  Khởi chạy Hardhat Local Node, triển khai Smart Contract và cập nhật cấu hình
+7.  Cấu hình ví MetaMask kết nối mạng Local Hardhat (Chain ID 31337)
+8.  Khởi chạy Frontend và Backend API, URL truy cập và Health Check
+9.  Quy trình kiểm thử tự động, Linter và Build kiểm tra
+10. Hướng dẫn kiểm tra các luồng nghiệp vụ chính trên giao diện
+11. Danh mục sự cố thường gặp (Troubleshooting) và cách xử lý
+12. Phân định chức năng Chạy Cục bộ (Offline/Local) vs Mạng Bên ngoài (Cloud/Sepolia)
+
+================================================================================
+1. PHẦN MỀM VÀ PHIÊN BẢN YÊU CẦU
+================================================================================
+Trước khi bắt đầu, hãy đảm bảo máy tính của bạn đã cài đặt các phần mềm sau:
+
+1.1. Node.js & npm:
+  - Phiên bản Node.js: v24.x (Khuyến nghị v24.19.0 LTS hoặc tối thiểu Node.js >= 20.18.0).
+  - Phiên bản npm: v11.x (Đã kiểm chứng với npm 11.17.0).
+  - Kiểm tra bằng lệnh:
+      node -v
+      npm -v
+
+1.2. Microsoft SQL Server:
+  - Phiên bản: Microsoft SQL Server 2022 hoặc 2025 (Bản Developer hoặc Express Edition đều được).
+    (Đã kiểm chứng thực tế: Microsoft SQL Server 2025 RTM 17.0.1000.7 X64 Developer Edition).
+  - Công cụ quản trị: SQL Server Management Studio (SSMS v20+) hoặc Azure Data Studio, hoặc tiện ích dòng lệnh `sqlcmd`.
+  - Chế độ xác thực: Mixed Mode Authentication (SQL Server and Windows Authentication mode).
+  - Cổng mạng TCP/IP mặc định: 1433.
+
+1.3. Git:
+  - Phiên bản Git: >= 2.40.0.
+
+1.4. Trình duyệt Web & Ví Web3:
+  - Trình duyệt: Google Chrome, Microsoft Edge, Brave hoặc Firefox.
+  - Tiện ích mở rộng (Extension): MetaMask Wallet (phiên bản mới nhất).
+
+================================================================================
+2. TIẾP NHẬN MÃ NGUỒN, MỞ TERMINAL VÀ CÀI ĐẶT DEPENDENCIES
+================================================================================
+2.1. Giải nén hoặc sao chép mã nguồn:
+  - Đặt thư mục dự án tại đường dẫn không chứa ký tự đặc biệt nguy hiểm hoặc dấu cách quá dài nếu có thể.
+  - Ví dụ thư mục: `C:\Projects\BookChainLibrary` hoặc thư mục hiện tại của bạn.
+
+2.2. Mở Terminal đúng thư mục gốc:
+  - Mở PowerShell (hoặc Command Prompt / Windows Terminal).
+  - Chuyển thư mục vào thư mục gốc của dự án (nơi chứa file `package.json`).
+  - Kiểm tra các file cốt lõi tồn tại:
+      Get-ChildItem package.json, hardhat.config.cjs, BookChainLibrary_SQLServer.sql
+
+2.3. Cài đặt các thư viện phụ thuộc (Dependencies):
+  - Chạy lệnh cài đặt chuẩn đối chiếu với package-lock.json:
+      npm install
+  - Kết quả mong đợi:
+      Tất cả các gói packages được cài đặt thành công vào thư mục `node_modules/`.
+      Không có lỗi nghiêm trọng (exit code 0).
+
+================================================================================
+3. CẤU HÌNH BIẾN MÔI TRƯỜNG (.env) TỪ .env.example
+================================================================================
+3.1. Tạo file `.env`:
+  - Tại thư mục gốc của dự án, sao chép file `.env.example` thành file `.env`:
+    * Trên PowerShell:
+        Copy-Item .env.example .env
+    * Hoặc trên CMD:
+        copy .env.example .env
+
+3.2. Giải thích chi tiết từng biến môi trường:
+  -----------------------------------------------------------------------------
+  Biến                     | Giá trị mặc định (Local)     | Giải thích
+  -----------------------------------------------------------------------------
+  PORT                     | 5000                        | Cổng lắng nghe của Backend API Server.
+  NODE_ENV                 | development                 | Môi trường chạy (development / production).
+  CLIENT_ORIGIN            | http://localhost:5173       | Địa chỉ URL frontend được phép kết nối CORS.
+  
+  DB_SERVER                | localhost                   | Tên host hoặc IP máy chủ SQL Server.
+  DB_PORT                  | 1433                        | Cổng TCP của SQL Server (mặc định 1433).
+  DB_NAME                  | BookChainLibrary            | Tên CSDL hệ thống sử dụng.
+  DB_USER                  | sa                          | Tài khoản SQL Server (sa hoặc user có quyền DBO).
+  DB_PASSWORD              | <mật khẩu của bạn>          | Mật khẩu SQL Server trên máy bạn.
+  DB_TRUST_SERVER_CERTIFICATE| true                      | Bỏ qua kiểm tra chứng chỉ SSL tự ký của SQL Server.
+  DB_ENCRYPT               | false                       | Mã hóa đường truyền SSL (để false cho local dev).
+  
+  JWT_SECRET               | chuỗi bí mật ngẫu nhiên     | Khóa bí mật ký JWT Session Token (tối thiểu 32 ký tự).
+  SESSION_EXPIRES_DAYS     | 7                           | Thời hạn phiên đăng nhập (ngày).
+  COOKIE_SECURE            | false                       | Bật cờ Secure cho cookie (false cho HTTP local).
+  
+  STORAGE_DRIVER           | local                       | Trình điều khiển lưu trữ tệp (local / ipfs).
+  STORAGE_LOCAL_PATH       | storage/books               | Thư mục lưu trữ bản thảo sách cục bộ.
+  MAX_UPLOAD_SIZE_MB       | 50                          | Dung lượng tệp sách tối đa cho phép tải lên (MB).
+  
+  BLOCKCHAIN_NETWORK       | localhost                   | Mạng blockchain mục tiêu (localhost / sepolia).
+  BLOCKCHAIN_CHAIN_ID      | 31337                       | Chain ID (31337 cho Hardhat, 11155111 cho Sepolia).
+  HARDHAT_RPC_URL          | http://127.0.0.1:8545       | Endpoint RPC của Hardhat Local Node.
+  CONTRACT_ADDRESS         | (Để trống để tự đọc JSON)   | Địa chỉ Contract (tự nạp từ deployedAddresses.json).
+  REGISTRAR_PRIVATE_KEY    | 0xac09...f2ff80             | Khóa riêng tài khoản Relay Signer (Hardhat Account #0).
+  -----------------------------------------------------------------------------
+
+  > LƯU Ý BẢO MẬT: File `.env` chứa thông tin mật khẩu cục bộ của bạn, đã được
+  > cấu hình trong `.gitignore`. Tuyệt đối không commit file `.env` lên Git!
+
+================================================================================
+4. CÀI ĐẶT & CẤU HÌNH SQL SERVER, TẠO DATABASE, MIGRATION VÀ SEED
+================================================================================
+Thực hiện chính xác theo thứ tự 3 bước sau:
+
+4.1. Bước 1: Tạo cấu trúc bảng cơ sở (Base Schema)
+  - Mở công cụ SQL Server Management Studio (SSMS).
+  - Kết nối vào SQL Server instance của bạn (ví dụ `localhost` hoặc `.\SQLEXPRESS`).
+  - Mở tệp: `BookChainLibrary_SQLServer.sql` (nằm ở thư mục gốc của dự án).
+  - Nhấn nút "Execute" (F5).
+  - Tác vụ thực hiện:
+    * Tạo cơ sở dữ liệu `BookChainLibrary` nếu chưa tồn tại.
+    * Tạo 15 bảng nghiệp vụ chính: Users, Roles, UserRoles, Sessions, AuthorProfiles,
+      Books, BookAuthors, BookFiles, CopyrightRecords, Reports, ReportActions,
+      Wallets, BlockchainTransactions, Favorites, ReadingProgress.
+    * Seed sẵn 3 vai trò hệ thống: READER, AUTHOR, ADMIN trong bảng dbo.Roles.
+  - Kết quả mong đợi: Thông báo "BookChainLibrary schema script completed." (0 errors).
+
+4.2. Bước 2: Chạy migration bảng mã mời tác giả (Author Invitations Migration)
+  - Mở Terminal tại thư mục gốc dự án.
+  - Chạy lệnh migration:
+      npm run db:migrate
+  - Lệnh tương ứng thực tế: `tsx server/db/runMigration.ts`
+  - Tác vụ thực hiện: Đọc tệp `server/db/migrations/001_create_invitations.sql`, tạo
+    2 bảng `dbo.AuthorInvitations` và `dbo.InvitationUses` kèm các chỉ mục (indexes).
+  - Kết quả mong đợi:
+      [Migration] Successfully executed: 001_create_invitations.sql
+
+4.3. Bước 3: Nạp dữ liệu sách số mẫu (Seed Books)
+  - Dữ liệu sách mẫu sẽ được tự động nạp khi server khởi động (nếu đã có ít nhất 1 tài khoản
+    người dùng trong hệ thống để gán bút danh tác giả).
+  - Hoặc bạn có thể chạy thủ công sau khi đăng ký tài khoản đầu tiên bằng lệnh:
+      npx tsx server/db/seedBooks.ts
+  - Tác phẩm được nạp gồm 3 cuốn sách kinh điển với tệp PDF thực tế và mã băm SHA-256 thật:
+    1. "Đại Việt Sử Ký Toàn Thư — Bản Khảo Dị Quốc Sử Quán" (PUBLIC_READ)
+    2. "Truyện Kiều — Khảo Luận Văn Bản Nôm Liễu Văn Đường 1871" (PUBLIC_DOWNLOAD)
+    3. "The Architecture of Trustless Digital Archives" (PUBLIC_READ)
+
+================================================================================
+5. THIẾT LẬP TÀI KHOẢN THỬ NGHIỆM VÀ BOOTSTRAP ADMIN AN TOÀN
+================================================================================
+Hệ thống KHÔNG có tài khoản Admin hardcode sẵn mật khẩu trong CSDL để đảm bảo bảo mật.
+Bạn thiết lập quản trị viên đầu tiên bằng cơ chế Bootstrap an toàn:
+
+5.1. Bước 1: Khởi động server hoặc đăng ký tài khoản qua API/Giao diện
+  - Cách A (Khuyên dùng):
+    * Khởi chạy dự án (xem mục 8), mở trình duyệt tại `http://localhost:5173/login`.
+    * Chuyển sang tab "Đăng ký" và tạo một tài khoản mới, ví dụ:
+        Họ tên  : Quản Trị Viên
+        Email   : admin@bookchain.io
+        Mật khẩu: Password123!
+  - Cách B (Qua lệnh curl / PowerShell API):
+    Invoke-RestMethod -Uri "http://localhost:5000/api/auth/register" -Method Post `
+      -ContentType "application/json" `
+      -Body '{"email":"admin@bookchain.io","password":"Password123!","displayName":"Quản Trị Viên"}'
+
+5.2. Bước 2: Nâng cấp tài khoản thành ADMIN qua lệnh CLI an toàn
+  - Mở Terminal tại thư mục gốc dự án.
+  - Chạy lệnh bootstrap admin:
+      npm run bootstrap:admin -- admin@bookchain.io
+  - Script thực thi: `server/scripts/bootstrapAdmin.ts`
+  - Cơ chế bảo mật:
+    * Tìm người dùng theo email chuẩn hóa.
+    * Gán vai trò `ADMIN` vào bảng `dbo.UserRoles` với ghi nhận kiểm toán tự bootstrap.
+    * Tuyệt đối không in mật khẩu, token hay private key ra màn hình.
+    * Tính chất Idempotent: Nếu chạy lại cho cùng một email, hệ thống thông báo tài khoản
+      đã là ADMIN mà không bị nhân bản bản ghi.
+  - Kết quả mong đợi:
+      ===============================================================
+      ADMIN BOOTSTRAP RESULT: SUCCESS
+      ===============================================================
+      User ID:      <GUID>
+      Email:        admin@bookchain.io
+      Display Name: Quản Trị Viên
+      Roles:        READER, ADMIN
+      Status:       User [admin@bookchain.io] has been successfully granted the ADMIN role.
+      ===============================================================
+
+================================================================================
+6. KHỞI CHẠY HARDHAT LOCAL NODE, TRIỂN KHAI CONTRACT & CẬP NHẬT CẤU HÌNH
+================================================================================
+Hệ thống sử dụng mạng blockchain cục bộ Hardhat Node để phát triển và kiểm thử
+toàn bộ các chức năng Web3 on-chain mà không tốn phí gas hay phụ thuộc internet.
+
+6.1. Khởi chạy Hardhat Node (Mở Terminal 1):
+  - Chạy lệnh:
+      npm run contracts:node
+  - Lệnh thực tế: `hardhat node`
+  - Kết quả mong đợi:
+      Node JSON-RPC khởi chạy tại: `http://127.0.0.1:8545/`
+      Chain ID: 31337
+      Hiển thị 20 tài khoản thử nghiệm (Account #0 đến #19) có sẵn 10,000 ETH test.
+  - QUAN TRỌNG: Giữ Terminal này mở liên tục trong suốt quá trình làm việc.
+
+6.2. Triển khai Smart Contract lên Local Node (Mở Terminal 2):
+  - Tại một cửa sổ Terminal mới, chạy lệnh:
+      npm run contracts:deploy:local
+  - Lệnh thực tế: `hardhat run scripts/deploy.cjs --network localhost`
+  - Tác vụ tự động thực hiện:
+    * Biên dịch contract `BookCopyrightRegistry.sol` (nếu cần).
+    * Triển khai contract bằng tài khoản Account #0 (`0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266`).
+    * Ghi lại biên lai triển khai vào: `deployments/localhost.json`.
+    * Tự động cập nhật địa chỉ contract mới vào:
+      - `src/contracts/deployedAddresses.json` (dành cho Frontend React).
+      - `server/contracts/deployedAddresses.json` (dành cho Backend Express).
+  - Kết quả mong đợi:
+      ================================================================================
+      DEPLOYING BOOK COPYRIGHT REGISTRY TO NETWORK: LOCALHOST
+      ================================================================================
+      Deployer address : 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+      Account balance  : 10000.0 ETH
+      Network Name     : localhost
+      Chain ID         : 31337
+      Deploying BookCopyrightRegistry contract...
+      Contract deployed successfully!
+      Contract Address : 0x5FbDB2315678afecb367f032d93F642f64180aa3
+      Deployment Tx    : 0x...
+      Block Number     : 1
+      Deployment info saved to: .../deployments/localhost.json
+      Updated deployedAddresses.json in server and client directories.
+      ================================================================================
+
+================================================================================
+7. CẤU HÌNH VÍ METAMASK CHO LOCAL NETWORK
+================================================================================
+Để tương tác với các tính năng Web3 trực tiếp trên giao diện:
+
+7.1. Thêm Mạng "Hardhat Local" vào MetaMask:
+  - Mở tiện ích MetaMask -> Chọn biểu tượng danh sách Mạng (Network dropdown) -> "Thêm mạng" (Add network).
+  - Chọn "Thêm mạng thủ công" (Add a network manually) và điền các thông số:
+    * Tên mạng (Network Name)         : Hardhat Local
+    * URL RPC mới (New RPC URL)        : http://127.0.0.1:8545
+    * Mã chuỗi (Chain ID)              : 31337
+    * Ký hiệu tiền tệ (Currency Symbol): ETH
+  - Nhấn "Lưu" (Save).
+
+7.2. Nhập tài khoản thử nghiệm vào MetaMask:
+  - Tài khoản Admin / Registrar (Hardhat Account #0):
+    * Khóa riêng (Private Key): `0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80`
+    * Địa chỉ ví tương ứng: `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266`
+    * Vai trò: Có quyền DEFAULT_ADMIN_ROLE và REGISTRAR_ROLE, dùng để ký duyệt trực tiếp hoặc quản trị tranh chấp.
+  - Tài khoản Tác giả thử nghiệm (Hardhat Account #1):
+    * Khóa riêng (Private Key): `0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d`
+    * Địa chỉ ví tương ứng: `0x70997970C51812dc3A010C7d01b50e0d17dc79C8`
+    * Vai trò: Tác giả thông thường (dùng để thử nghiệm luồng ký qua Relay Signer).
+
+================================================================================
+8. KHỞI CHẠY FRONTEND / BACKEND, URL TRUY CẬP VÀ HEALTH CHECK
+================================================================================
+8.1. Các phương án khởi chạy ứng dụng:
+  - Cách 1: Khởi chạy đồng thời cả Frontend và Backend trong 1 Terminal (Khuyên dùng):
+      npm run dev:all
+    (Lệnh này sử dụng concurrently để chạy song song Vite Client và TSX Server Watch).
+
+  - Cách 2: Khởi chạy từng dịch vụ riêng biệt trong 2 Terminal:
+    * Terminal 1 (Backend Express API Server):
+        npm run server:dev  (hoặc npm run server)
+    * Terminal 2 (Frontend Vite Development Server):
+        npm run dev
+
+8.2. Các địa chỉ truy cập chính:
+  - Giao diện người dùng (Frontend Web):
+      http://localhost:5173
+  - API Server (Backend Base URL):
+      http://localhost:5000
+
+8.3. Kiểm tra sức khỏe hệ thống (Health Check Endpoint):
+  - Mở trình duyệt hoặc gọi lệnh kiểm tra:
+      GET http://localhost:5000/api/health
+  - Kết quả mong đợi (HTTP 200 OK):
+      {
+        "success": true,
+        "data": {
+          "status": "healthy",
+          "timestamp": "2026-10-15T...",
+          "uptimeSeconds": 15,
+          "database": {
+            "connected": true,
+            "latencyMs": 4,
+            "databaseName": "BookChainLibrary"
+          },
+          "environment": "development"
+        }
+      }
+  - Nếu kết nối database gặp sự cố, endpoint sẽ trả về HTTP 503 với status: "degraded".
+
+================================================================================
+9. CÁCH CHẠY TEST, LINT VÀ BUILD
+================================================================================
+Trước khi commit mã nguồn hoặc bàn giao nghiệm thu, hãy chạy đầy đủ các lệnh sau:
+
+9.1. Kiểm tra Linter (Oxlint):
+  - Lệnh:
+      npm run lint
+  - Tác vụ: Phân tích cú pháp mã nguồn tại `src/`, `server/`, `tests/`.
+  - Kết quả mong đợi: `Found 0 errors` (exit code 0).
+
+9.2. Kiểm tra Đóng gói sản phẩm (Production Build):
+  - Lệnh:
+      npm run build
+  - Tác vụ: Thực thi biên dịch TypeScript toàn dự án (`tsc -b`) và đóng gói tài nguyên Vite (`vite build`).
+  - Kết quả mong đợi: Bundle thành công trong thư mục `dist/`, không có lỗi kiểu dữ liệu TypeScript (0 errors).
+
+9.3. Chạy Unit Tests Smart Contract (Hardhat Test):
+  - Lệnh:
+      npm run contracts:test
+  - Tác vụ: Chạy 29 bài kiểm thử độc lập smart contract (deployment, roles, registration, duplicate hash prevention, multi-version, dispute lifecycle, pausable circuit breaker).
+  - Kết quả mong đợi: `29 passing` (exit code 0, không cần node mạng bên ngoài).
+
+9.4. Chạy toàn bộ Integration Tests hệ thống (Vitest):
+  - ĐIỀU KIỆN TIÊN QUYẾT:
+    1. SQL Server đang chạy (cổng 1433) và đã chạy script schema + migration.
+    2. Hardhat Local Node đang chạy (`npm run contracts:node`).
+    3. Contract đã được triển khai lên node local (`npm run contracts:deploy:local`).
+  - Lệnh:
+      npm test
+  - Lệnh tương ứng: `vitest run --fileParallelism=false`
+  - Tác vụ: Chạy tuần tự 9 tệp test tích hợp bao gồm:
+    * `tests/api.test.ts` (13 tests) - Xác thực, đăng ký, đăng nhập, phân quyền cơ bản.
+    * `tests/step02_books.test.ts` (22 tests) - Danh mục sách, upload tệp, phân quyền file, tính SHA-256.
+    * `tests/step02_1_invitations.test.ts` (19 tests) - Tạo mã mời, đổi mã mời, giới hạn lượt dùng, RBAC.
+    * `tests/step03_blockchain_utils.test.ts` (7 tests) - Tiện ích chuyển đổi bytes32 <-> sha256 <-> uuid.
+    * `tests/step03_1_wallet.test.ts` (9 tests) - Quản lý liên kết địa chỉ ví người dùng.
+    * `tests/step04_copyright_integration.test.ts` (14 tests) - Luồng đăng ký bản quyền blockchain và verify.
+    * `tests/step05_dispute_management.test.ts` (18 tests) - Quản lý tranh chấp, khiếu nại, circuit breaker.
+    * `tests/step06_storage_reconciliation.test.ts` (8 tests) - Đối soát giao dịch treo và storage engine.
+    * `tests/step07_author_approval.test.ts` (19 tests) - Luồng xét duyệt bút danh tác giả của Admin.
+  - Kết quả mong đợi: `129 passed (129)` trên 9 tệp test suites (100% PASS).
+
+================================================================================
+10. HƯỚNG DẪN KIỂM TRA CÁC LUỒNG NGHIỆP VỤ CHÍNH TRÊN GIAO DIỆN
+================================================================================
+Sau khi hệ thống đã khởi chạy, kiểm tra các luồng theo trình tự logic sau:
+
+10.1. Luồng 1: Đăng nhập & Phân quyền RBAC (READER -> AUTHOR -> ADMIN)
+  - Truy cập `http://localhost:5173/login`.
+  - Đăng ký một tài khoản độc giả mới (READER).
+  - Sau khi đăng nhập, kiểm tra thanh Navbar: Người dùng READER chỉ có menu "Khám phá", "Tác giả", "Cách thức hoạt động", "Xác minh" và nút "Hồ sơ". Nút kết nối ví không xuất hiện để tránh gây nhiễu.
+
+10.2. Luồng 2: Quy trình Đăng ký Bút danh & Duyệt Tác giả (Author Approval)
+  - Tại trang Hồ sơ cá nhân (`/profile`):
+    * Độc giả điền form "Đăng ký bút danh tác giả" (Nhập Bút danh và Tiểu sử) -> Nhấn "Gửi hồ sơ xét duyệt".
+    * Trạng thái hồ sơ chuyển sang màu hổ phách: `PENDING` (Đang chờ Quản trị viên xét duyệt).
+    * Tài khoản chưa có quyền tạo sách (nếu truy cập `/author/studio` sẽ có banner thông báo trạng thái).
+  - Đăng xuất, đăng nhập vào tài khoản ADMIN (`admin@bookchain.io`):
+    * Truy cập Bảng điều khiển Quản trị (`/admin`) -> Chọn tab "DUYỆT TÁC GIẢ" (AUTHOR_REQUESTS).
+    * Thấy yêu cầu của tác giả vừa gửi trong bảng danh sách.
+    * Nhấn nút "Phê duyệt" (Approve) kèm ghi chú kiểm toán.
+  - Đăng nhập lại tài khoản tác giả:
+    * Trạng thái hồ sơ chuyển sang màu xanh lá: `VERIFIED` (Đã phê duyệt).
+    * Tài khoản được tự động cấp vai trò `AUTHOR`.
+    * Menu "Author Studio" xuất hiện trên Navbar và nút "Tạo tác phẩm" được mở khóa hoàn toàn.
+
+10.3. Luồng 3: Quy trình Mã mời Tác giả (Author Invitations)
+  - Tài khoản ADMIN vào `/admin` -> Chọn tab "MÃ MỜI TÁC GIẢ" (INVITATIONS).
+  - Điền form: chọn thời hạn (ví dụ 30 ngày), số lượt dùng tối đa (1 lượt), ghi chú -> Nhấn "Tạo mã mời".
+  - Hộp thoại hiển thị chuỗi mã mật mã định dạng `BKC-XXXX-YYYY-ZZZZ`.
+  - Một độc giả khác có thể vào `/profile`, nhập chuỗi mã này vào ô "Đổi mã mời tác giả" -> Nâng cấp tức thì lên `AUTHOR`.
+
+10.4. Luồng 4: Tạo Tác phẩm, Tải Tệp và Tăng Phiên bản (Author Studio)
+  - Tác giả vào `/author/studio` -> Nhấn "Tạo tác phẩm mới".
+  - Nhập Tiêu đề, Mô tả, Ngôn ngữ, URL Ảnh bìa -> Nhấn "Tạo tác phẩm".
+  - Trong chi tiết sách, tải lên tệp bản thảo đầu tiên (PDF, EPUB, TXT).
+  - Hệ thống tự động tính mã băm SHA-256 từ byte thực tế của tệp, lưu tệp vào `storage/books/` với Safe Storage Key, đặt `VersionNumber = 1` và `IsCurrent = 1`.
+  - Khi tác giả tải lên bản thảo sửa đổi thứ hai: Hệ thống đặt `VersionNumber = 2`, cập nhật `IsCurrent = 1` cho bản mới và chuyển bản cũ thành `IsCurrent = 0`. Cả 2 phiên bản đều được lưu vết đầy đủ.
+
+10.5. Luồng 5: Đăng ký Bản quyền Lên Blockchain (Blockchain Copyright Registration)
+  - Tác giả kết nối ví MetaMask (chọn mạng Hardhat Local).
+  - Tại trang tác phẩm trong Author Studio, chọn phiên bản tệp muốn đăng ký -> Nhấn "Đăng ký bản quyền".
+  - Nhập Tuyên bố tác quyền (Claim Statement).
+  - Nhánh A (Nếu ví đang kết nối là Account #0 có quyền Registrar):
+    * MetaMask hiển thị popup xác nhận giao dịch -> Nhấn "Xác nhận".
+    * Smart contract thực thi hàm `registerCopyright()`.
+  - Nhánh B (Nếu ví đang kết nối là ví tác giả thông thường):
+    * Giao diện cung cấp tùy chọn "Ủy quyền Registrar Relay phát sóng".
+    * Nhấn nút ủy quyền -> Backend Relay Signer phát sóng giao dịch thay mặt tác giả; địa chỉ ví của tác giả vẫn được ghi bất biến vào trường `authorWallet` on-chain.
+  - Sau khi giao dịch được xác nhận (1 confirmation): Trạng thái bản ghi chuyển thành `ON_CHAIN`, lưu vết TxHash và số khối.
+
+10.6. Luồng 6: Xác minh Bản quyền Độc lập (Archival Verification)
+  - Truy cập trang `/verify`.
+  - Cách A (Kéo thả tệp): Kéo thả bất kỳ tệp sách nào vào ô tải lên. Trình duyệt tự tính mã băm SHA-256 ngay trên client qua Web Crypto API, sau đó truy vấn Smart Contract `contract.verifyHash()` và CSDL SQL Server.
+  - Cách B (Tra cứu theo Hash / Record ID): Nhập chuỗi SHA-256 hex hoặc mã bản ghi.
+  - Kết quả hiển thị: Chứng chỉ Lưu trữ (Archival Certificate) gồm Trạng thái On-Chain (`ACTIVE`), Record ID, Mã băm SHA-256, Ví tác giả, Số khối, và đối soát toàn vẹn byte tệp trên máy chủ.
+
+10.7. Luồng 7: Xử lý Khiếu nại, Tranh chấp & Cầu dao Khẩn cấp (Disputes & Circuit Breaker)
+  - Độc giả truy cập trang chi tiết sách `/book/:id` -> Nhấn "Khiếu nại bản quyền".
+  - Chọn lý do vi phạm (ví dụ: Đạo văn/sao chép), nhập mô tả chi tiết -> Gửi khiếu nại.
+  - Admin vào `/admin` -> Chọn tab "KHIẾU NẠI & TRANH CHẤP" (DISPUTES):
+    * Xem bằng chứng và lịch sử xử lý (Audit Timeline).
+    * Nhấn "Kích hoạt Tranh chấp On-chain": Smart contract đổi trạng thái sang `DISPUTED`.
+    * Sau khi xác minh, Admin có thể:
+      - "Khôi phục Bản quyền": Smart contract hoàn nguyên về `ACTIVE`.
+      - Hoặc "Thu hồi Vĩnh viễn": Smart contract chuyển sang `REVOKED`.
+  - Tab "GOVERNANCE": Admin có thể gạt công tắc "Circuit Breaker" (Tạm dừng khẩn cấp Smart Contract qua `pause()`). Khi đang tạm dừng, mọi giao dịch đăng ký mới on-chain đều bị từ chối an toàn.
+
+================================================================================
+11. DANH MỤC SỰ CỐ THƯỜNG GẶP (TROUBLESHOOTING) VÀ CÁCH XỬ LÝ
+================================================================================
+
+11.1. Lỗi: "Database connection failed / Failed to connect to localhost:1433"
+  - Nguyên nhân: SQL Server chưa khởi chạy, hoặc dịch vụ TCP/IP bị tắt trong SQL Server Configuration Manager.
+  - Cách khắc phục:
+    1. Mở `services.msc` -> Tìm `SQL Server (MSSQLSERVER)` hoặc `SQL Server (SQLEXPRESS)` -> Chọn "Start" / "Restart".
+    2. Mở "SQL Server Configuration Manager" -> Chọn "SQL Server Network Configuration" -> "Protocols for MSSQLSERVER" -> Đảm bảo `TCP/IP` đang ở trạng thái `Enabled`.
+    3. Nhấp đúp vào `TCP/IP` -> Tab `IP Addresses` -> Cuộn xuống `IPAll` -> Đảm bảo `TCP Port` là `1433`.
+    4. Khởi động lại dịch vụ SQL Server.
+
+11.2. Lỗi: "Login failed for user 'sa'" / Sai mật khẩu .env
+  - Nguyên nhân: Mật khẩu `DB_PASSWORD` trong file `.env` không khớp với mật khẩu tài khoản `sa` của bạn.
+  - Cách khắc phục: Mở SSMS, đăng nhập bằng Windows Authentication, chuột phải vào `Security` -> `Logins` -> `sa` -> Đặt lại mật khẩu mới. Cập nhật lại mật khẩu này vào file `.env`.
+
+11.3. Lỗi: Cổng mạng bị chiếm dụng (Port 5000, 5173 hoặc 8545)
+  - Biểu hiện: `Error: listen EADDRINUSE: address already in use :::5000`
+  - Cách khắc phục trên Windows PowerShell:
+    * Tìm Process ID (PID) đang chiếm cổng (ví dụ cổng 5000):
+        Get-Process -Id (Get-NetTCPConnection -LocalPort 5000).OwningProcess
+    * Đóng tiến trình đó:
+        Stop-Process -Id <PID> -Force
+
+11.4. Lỗi: "Contract address not found / CALL_EXCEPTION on smart contract"
+  - Nguyên nhân: Bạn vừa khởi động lại `npm run contracts:node`, khiến toàn bộ dữ liệu node local bị reset về Block 0 và hợp đồng cũ bị mất.
+  - Cách khắc phục:
+    Chỉ cần chạy lại lệnh triển khai:
+      npm run contracts:deploy:local
+    Lệnh này sẽ tự động deploy lại và cập nhật địa chỉ contract mới vào toàn bộ cấu hình client/server.
+
+11.5. Lỗi: MetaMask báo "Nonce too high" hoặc giao dịch bị treo (Pending)
+  - Nguyên nhân: Node Hardhat local bị khởi động lại trong khi ví MetaMask vẫn lưu số đếm nonce cũ của các phiên trước.
+  - Cách khắc phục trong MetaMask:
+    Vào MetaMask -> Nhấn vào biểu tượng tài khoản (tròn trên cùng góc phải) -> "Cài đặt" (Settings) -> "Nâng cao" (Advanced) -> Nhấn nút "Xóa dữ liệu tab hoạt động" (Clear activity tab data) hoặc "Đặt lại tài khoản" (Reset account). Việc này KHÔNG làm mất tiền hay private key mà chỉ xóa lịch sử nonce bị lệch.
+
+11.6. Lỗi: MetaMask báo "Wrong Network"
+  - Khắc phục: Nhấn nút chuyển mạng trên giao diện ứng dụng hoặc chuyển mạng thủ công trong MetaMask về "Hardhat Local" (Chain ID 31337).
+
+================================================================================
+12. PHÂN ĐỊNH RÕ CHỨC NĂNG CHẠY CỤC BỘ VS CẦN DỊCH VỤ BÊN NGOÀI
+================================================================================
+
+12.1. CÁC CHỨC NĂNG HOẠT ĐỘNG HOÀN TOÀN TRÊN MÁY CỤC BỘ (100% OFFLINE / LOCAL):
+  - Toàn bộ Giao diện người dùng Web (React 19 SPA, Theme Sáng/Tối, Song ngữ Anh/Việt).
+  - Toàn bộ Backend REST API Server (Express + TypeScript).
+  - Toàn bộ Cơ sở dữ liệu quan hệ (Microsoft SQL Server: Users, Books, Files, Sessions, RBAC).
+  - Toàn bộ Quy trình Duyệt Bút danh Tác giả (Author Profile Approval) và Mã mời tác giả.
+  - Quản lý phiên bản tệp sách và lưu trữ trên ổ đĩa cục bộ (`storage/books/`).
+  - Đối soát mã băm mật mã học SHA-256 từ byte tệp nhị phân thật.
+  - Mạng Blockchain Hardhat Local (Cổng 8545, Chain ID 31337).
+  - Ký và phát sóng giao dịch Smart Contract (đăng ký bản quyền, đối soát, khiếu nại, circuit breaker).
+  - Toàn bộ 29 Unit Tests Smart Contract và 129 Integration Tests hệ thống.
+  -> Thành viên mới KHÔNG CẦN bất kỳ tài khoản đám mây, API key trả phí hay ETH thật nào
+     để chạy và kiểm thử toàn bộ hệ thống này!
+
+12.2. CÁC CHỨC NĂNG ĐÒI HỎI DỊCH VỤ VÀ THÔNG SỐ BÊN NGOÀI (EXTERNAL / PRODUCTION READY):
+  - Triển khai lên Ethereum Sepolia Testnet (`npm run contracts:deploy:sepolia`):
+    * Đòi hỏi `SEPOLIA_RPC_URL` (Alchemy, Infura hoặc Publicnode Sepolia).
+    * Đòi hỏi `SEPOLIA_PRIVATE_KEY` của một ví thật có số dư Sepolia ETH (lấy từ Sepolia Faucet).
+  - Xác thực mã nguồn Contract công khai trên Etherscan:
+    * Đòi hỏi `ETHERSCAN_API_KEY` từ trang etherscan.io.
+  - Lưu trữ phi tập trung IPFS qua Pinata Cloud:
+    * Khi chuyển `STORAGE_DRIVER=ipfs`, hệ thống hỗ trợ ghim tệp lên IPFS toàn cầu nếu có `PINATA_JWT`.
+    * Nếu không có Pinata JWT, `ipfsStorageProvider.ts` vẫn hoạt động ở chế độ mô phỏng CIDv0 chuẩn hóa và bộ đệm tệp cục bộ tại `storage/ipfs/`.
+
+================================================================================
+KẾT LUẬN
+================================================================================
+Hệ thống BookChain Library được đóng gói theo tiêu chuẩn tự cung ứng (Self-Contained).
+Một thành viên mới chỉ cần làm theo đúng 12 mục trong tài liệu này là có thể tự cấu hình,
+khởi chạy và kiểm thử toàn bộ dự án từ A-Z một cách độc lập và an toàn.
+================================================================================

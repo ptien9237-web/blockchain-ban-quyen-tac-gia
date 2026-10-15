@@ -1,0 +1,14 @@
+{
+  "hardhat": {
+    "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    "chainId": "31337",
+    "transactionHash": "0xc8927c910e9730a6a27f25678aadd5fb2f9b272c1fca7d3ae4784bd4a86d7b1b",
+    "deployedAt": "2026-10-14T13:46:46.474Z"
+  },
+  "localhost": {
+    "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    "chainId": "31337",
+    "transactionHash": "0x23a71c80d6f2b169922fca125ff2b1d5e0c6198110aee6d12511598a8276a1ed",
+    "deployedAt": "2026-10-15T05:57:40.177Z"
+  }
+}

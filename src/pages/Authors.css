@@ -1,0 +1,17 @@
+.authors-page-root {
+  min-height: 80vh;
+}
+
+.author-card {
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.author-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-border-hover);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+}
+
+.author-avatar {
+  border: 1px solid var(--color-border);
+}

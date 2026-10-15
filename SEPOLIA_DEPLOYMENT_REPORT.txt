@@ -1,0 +1,125 @@
+================================================================================
+BÁO CÁO CHUẨN BỊ VÀ ĐÁNH GIÁ TRIỂN KHAI SEPOLIA TESTNET
+BOOKCHAIN LIBRARY — ETHEREUM SEPOLIA DEPLOYMENT SPECIFICATION
+================================================================================
+
+Thời gian lập báo cáo: 2026-10-15
+Hệ thống: BOOKCHAIN LIBRARY — Digital Library & Blockchain Copyright Registry
+Trạng thái triển khai hiện tại: PREPARED (SẴN SÀNG TOÀN DIỆN VỀ MÃ NGUỒN & KỊCH BẢN) / BLOCKED (CHỜ VÍ & RPC TESTNET THỰC TẾ)
+Lưu ý quan trọng: KHÔNG GHI "DEPLOYED" KHI CHƯA PHÁT SÓNG GIAO DỊCH THẬT LÊN SEPOLIA
+
+================================================================================
+1. TỔNG QUAN VỀ MÔI TRƯỜNG ETHEREUM SEPOLIA
+================================================================================
+
+- Mạng lưới: Ethereum Sepolia Testnet (Proof-of-Stake Testnet)
+- Chain ID: 11155111 (Hex: 0xaa36a7)
+- Đơn vị tiền tệ: SepoliaETH
+- Trình khám phá khối (Block Explorer): https://sepolia.etherscan.io
+- Tiêu chuẩn Smart Contract: `BookCopyrightRegistry.sol`
+  * Ngôn ngữ: Solidity 0.8.28
+  * Trình tối ưu: Enabled (200 runs)
+  * Kế thừa: OpenZeppelin v5 AccessControl, Pausable
+
+================================================================================
+2. TRẠNG THÁI CHUẨN BỊ KỸ THUẬT (TECHNICAL READINESS)
+================================================================================
+
+| Thành phần | Trạng thái chuẩn bị | Chi tiết kỹ thuật |
+|---|---|---|
+| **Mã nguồn Smart Contract** | **SẴN SÀNG 100%** | Biên dịch thành công, 29/29 tests pass trên Hardhat Mocha |
+| **Kịch bản Triển khai (Deploy Script)** | **SẴN SÀNG 100%** | `scripts/deploy.cjs` tự động kiểm tra số dư ví, đo lường gas, ghi nhận block number, cập nhật `deployedAddresses.json` |
+| **Kịch bản Phân quyền (Role Granting)** | **SẴN SÀNG 100%** | `scripts/grantRole.cjs` hỗ trợ cấp `REGISTRAR_ROLE` trên Sepolia cho ví relay của server |
+| **Cấu hình Mạng (Hardhat Config)** | **SẴN SÀNG 100%** | `hardhat.config.cjs` cấu hình Chain ID 11155111, fallback RPC `https://ethereum-sepolia-rpc.publicnode.com`, hỗ trợ Etherscan API |
+| **Tầng Backend Client** | **SẴN SÀNG 100%** | `server/blockchain/contractClient.ts` tự động nhận diện Chain ID 11155111 và nạp địa chỉ Sepolia từ `deployedAddresses.json` |
+| **Tầng Frontend Wallet Context** | **SẴN SÀNG 100%** | `src/contexts/WalletContext.tsx` nhận diện Sepolia (`0xaa36a7`), hiển thị "Ethereum Sepolia", hỗ trợ chuyển mạng tự động |
+| **RPC & Ví Testnet có số dư** | **CHƯA CẤU HÌNH (BLOCKED)** | File `.env` hiện tại chưa có `SEPOLIA_RPC_URL` và `SEPOLIA_PRIVATE_KEY` có số dư ETH testnet |
+
+================================================================================
+3. BẰNG CHỨNG KIỂM TRA LỆNH TRIỂN KHAI THỰC TẾ
+================================================================================
+
+Khi chạy lệnh kiểm tra kịch bản triển khai Sepolia:
+    npm run contracts:deploy:sepolia
+
+Kết quả thực tế từ Hardhat:
+    ================================================================================
+    DEPLOYING BOOK COPYRIGHT REGISTRY TO NETWORK: SEPOLIA
+    ================================================================================
+    Deployment failed: Error: No deployer account configured for network sepolia
+        at main (C:\...\scripts\deploy.cjs:12:11)
+
+Đánh giá:
+- Hệ thống phát hiện chính xác ví deployer chưa được cấu hình, ngăn chặn việc broadcast giao dịch rác hoặc dùng sai mạng.
+- Script deploy có điều kiện bảo vệ nghiêm ngặt (dòng 24-28 trong `scripts/deploy.cjs`):
+  Nếu ví có số dư 0 SepoliaETH, script sẽ lập tức dừng lại với cảnh báo:
+  "ERROR: Deployer account has 0 ETH on Sepolia testnet. Please fund your wallet with Sepolia ETH before deploying."
+
+================================================================================
+4. HƯỚNG DẪN DÀNH CHO NGƯỜI DÙNG ĐỂ TRIỂN KHAI LÊN SEPOLIA
+================================================================================
+
+Để đưa hệ thống lên mạng công khai Ethereum Sepolia, người dùng chỉ cần thực hiện 4 bước sau:
+
+Bước 1: Chuẩn bị Ví và lấy SepoliaETH miễn phí:
+    - Tạo một tài khoản ví MetaMask mới dành riêng cho thử nghiệm (KHÔNG dùng ví chứa tài sản thật).
+    - Sao chép địa chỉ ví (ví dụ: 0x1234...abcd).
+    - Nhận SepoliaETH miễn phí từ các vòi (faucets) công khai uy tín:
+      * Google Cloud Web3 Faucet: https://cloud.google.com/application/web3/faucet/ethereum/sepolia
+      * Alchemy Sepolia Faucet: https://www.alchemy.com/faucets/ethereum-sepolia
+      * QuickNode Sepolia Faucet: https://faucet.quicknode.com/ethereum/sepolia
+      * PoW Faucet: https://sepolia-faucet.pk910.de
+    - Đảm bảo ví có ít nhất 0.05 SepoliaETH để chi trả phí gas.
+
+Bước 2: Cấu hình biến môi trường trong file `.env`:
+    Mở file `.env` tại thư mục gốc dự án và bổ sung các dòng sau:
+    --------------------------------------------------------------------------------
+    # Ethereum Sepolia Testnet Configuration
+    BLOCKCHAIN_NETWORK=sepolia
+    BLOCKCHAIN_CHAIN_ID=11155111
+    SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
+    # Hoặc RPC từ Alchemy/Infura: https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY
+    SEPOLIA_PRIVATE_KEY=your_private_key_without_0x_prefix
+    ETHERSCAN_API_KEY=your_etherscan_api_key_for_contract_verification_optional
+    --------------------------------------------------------------------------------
+    (CẢNH BÁO BẢO MẬT: Không commit file .env chứa private key lên Git hoặc chia sẻ cho người khác).
+
+Bước 3: Thực hiện lệnh Triển khai:
+    Chạy lệnh:
+        npm run contracts:deploy:sepolia
+
+    Lệnh này sẽ:
+    1. Kết nối tới Sepolia RPC.
+    2. Triển khai hợp đồng `BookCopyrightRegistry.sol`.
+    3. Cấp vai trò `DEFAULT_ADMIN_ROLE` và `REGISTRAR_ROLE` cho ví deployer.
+    4. Tự động ghi lại địa chỉ contract thực tế và TxHash vào:
+       - `deployments/sepolia.json`
+       - `src/contracts/deployedAddresses.json`
+       - `server/contracts/deployedAddresses.json`
+
+Bước 4: Xác minh mã nguồn trên Sepolia Etherscan (Tùy chọn):
+    Sau khi triển khai thành công, chạy lệnh:
+        npx hardhat verify --network sepolia <CONTRACT_ADDRESS> <DEPLOYER_ADDRESS>
+
+================================================================================
+5. ĐỐI CHIẾU ĐỊA CHỈ TRÊN CÁC MÔI TRƯỜNG
+================================================================================
+
+- Môi trường Hardhat Local (Chain ID: 31337):
+  * Contract Address : 0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44
+  * Deployer / Admin : 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+  * Trạng thái       : Đang hoạt động, đã xác minh giao dịch, 29 tests pass
+
+- Môi trường Sepolia Testnet (Chain ID: 11155111):
+  * Contract Address : Chưa cấp phát on-chain (Chờ broadcast thực tế)
+  * Trạng thái       : PREPARED (Đã sẵn sàng kịch bản, không dùng địa chỉ local thay thế)
+
+================================================================================
+6. KẾT LUẬN
+================================================================================
+
+Toàn bộ kiến trúc và kịch bản kết nối Ethereum Sepolia đã được thiết kế chuẩn mực,
+tách bạch an toàn với môi trường Local và bảo vệ tuyệt đối thông tin bảo mật.
+Khi người dùng cung cấp RPC và ví có số dư SepoliaETH, hệ thống có thể phát sóng
+ngay lập tức trong một lệnh duy nhất.
+================================================================================

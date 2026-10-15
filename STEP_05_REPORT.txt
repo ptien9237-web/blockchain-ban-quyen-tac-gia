@@ -1,0 +1,232 @@
+================================================================================
+BÁO CÁO NGHIỆM THU KỸ THUẬT BƯỚC 05 — BOOKCHAIN LIBRARY
+DISPUTE MANAGEMENT, AUDIT TRAIL & SMART CONTRACT GOVERNANCE
+================================================================================
+
+Dự án: BOOKCHAIN LIBRARY — Digital Library & Blockchain Copyright Registry
+Thời gian nghiệm thu: 2026-10-15
+Người thực hiện: Senior Full-Stack Developer, Blockchain Engineer & QA Engineer
+Môi trường: Windows, Node.js v24.19.0, React 19, TypeScript 6, Express, SQL Server 2025, Hardhat Node (Chain ID 31337)
+
+================================================================================
+1. PHẠM VI BƯỚC 05 VÀ NGUỒN XÁC ĐỊNH
+================================================================================
+
+1.1. Nguồn xác định:
+- Kế hoạch lộ trình dự án tại `PROJECT_NOTES.txt` (Mục "CÁC BƯỚC TIẾP THEO (BƯỚC 05)").
+- Hợp đồng thông minh `contracts/BookCopyrightRegistry.sol` đã thiết kế sẵn các hàm vòng đời:
+  `disputeCopyright`, `resolveDispute`, `revokeCopyright`, `pause`, `unpause`.
+- Cấu trúc cơ sở dữ liệu `BookChainLibrary` trong SQL Server với hai bảng kiểm toán:
+  `dbo.Reports` và `dbo.ReportActions`.
+- Thông số kỹ thuật tích hợp `project_documentation/STEP_04_INTEGRATION_SPEC.md` và `STEP_04_REPORT.txt`.
+
+1.2. Mục tiêu chức năng:
+1. Tiếp nhận và xử lý khiếu nại vi phạm bản quyền:
+   - Cho phép bạn đọc và tác giả gửi đơn khiếu nại đối với sách hoặc hồ sơ bản quyền cụ thể.
+   - Hỗ trợ phân loại lý do khiếu nại chuẩn mực (Đạo văn, Phân phối không phép, Mạo danh tác giả,
+     Mã băm giả mạo, Sai lệch metadata, Khác) và yêu cầu cung cấp chi tiết bằng chứng.
+2. Lưu trữ hồ sơ và tiến trình kiểm toán (Audit Trail) trong CSDL:
+   - Quản lý trạng thái hồ sơ: `SUBMITTED`, `UNDER_REVIEW`, `ACTION_TAKEN`, `REJECTED`.
+   - Ghi nhận lịch sử xử lý minh bạch trong `dbo.ReportActions`: đổi trạng thái, thêm ghi chú nội bộ,
+     và ghi nhận các giao dịch blockchain liên quan.
+3. Tích hợp máy trạng thái tranh chấp trên Smart Contract:
+   - Admin kích hoạt `disputeCopyright` đưa bản ghi sang trạng thái `DISPUTED`.
+   - Admin đưa ra phán quyết qua `resolveDispute`: khôi phục về `ACTIVE` hoặc chuyển sang `REVOKED`.
+   - Admin có thể thu hồi trực tiếp qua `revokeCopyright` nếu có vi phạm nghiêm trọng.
+   - Tự động đồng bộ trạng thái giữa Smart Contract và bảng `dbo.CopyrightRecords` (`DISPUTED`, `ON_CHAIN`, `WITHDRAWN`).
+4. Quản trị Smart Contract & Cầu dao khẩn cấp (Emergency Circuit Breaker):
+   - Admin có thể kiểm tra trạng thái hoạt động của Smart Contract (`isPaused`).
+   - Admin có thể kích hoạt tạm dừng (`pause`) hoặc khôi phục (`unpause`) hợp đồng khi có sự cố.
+5. Giao diện người dùng & Cảnh báo thời gian thực:
+   - Admin Dashboard (`/admin`): Thiết kế lại theo cấu trúc 3 tab (`INVITATIONS`, `DISPUTES`, `GOVERNANCE`).
+   - Chi tiết sách (`/book/:id`): Hiển thị cảnh báo trực quan khi sách đang tranh chấp hoặc đã bị thu hồi;
+     tích hợp nút gửi khiếu nại.
+   - Xác minh bản quyền (`/verify`): Cập nhật huy hiệu trạng thái on-chain đối soát theo thời gian thực.
+
+================================================================================
+2. CHỨC NĂNG ĐÃ HOÀN THÀNH VÀ CÁCH KIỂM TRA
+================================================================================
+
+2.1. Phân hệ Bạn đọc Gửi Khiếu nại (Dispute Reporting Modal):
+- Nút "Khiếu nại bản quyền" được tích hợp trang trọng tại trang Chi tiết sách (`/book/:id`) và trang Xác minh (`/verify`).
+- Modal `ReportModal` cung cấp giao diện theo phong cách Archival Reading Room:
+  * Hiển thị đối tượng khiếu nại (tên sách, mã bản quyền on-chain, mã tệp).
+  * 6 danh mục lý do chuẩn mực kèm mô tả chi tiết.
+  * Ô nhập nội dung bằng chứng có kiểm tra độ dài tối thiểu (>= 10 ký tự).
+  * Chặn người dùng chưa đăng nhập (yêu cầu xác thực tài khoản).
+  * Hiển thị màn hình xác nhận tiếp nhận hồ sơ thành công kèm mã số tra cứu định danh.
+
+2.2. Phân hệ Quản trị Khiếu nại (Admin Dispute Operations):
+- Truy cập `/admin`, chọn Tab "KHIẾU NẠI & TRANH CHẤP" (`DISPUTES`):
+  * Thống kê tổng quan số lượng hồ sơ theo từng trạng thái.
+  * Bộ lọc danh sách theo trạng thái (`TẤT CẢ`, `SUBMITTED`, `UNDER_REVIEW`, `ACTION_TAKEN`, `REJECTED`).
+  * Modal chi tiết khiếu nại:
+    - Xem đầy đủ nội dung khiếu nại, người gửi, bằng chứng và thông tin bản quyền on-chain.
+    - Cập nhật trạng thái thụ lý và bổ sung ghi chú nội bộ của ban quản trị.
+    - Dòng thời gian kiểm toán (Audit Trail Timeline) hiển thị toàn bộ lịch sử hành động minh bạch.
+    - Nút thao tác On-chain trực tiếp:
+      * "Kích hoạt Tranh chấp Trên Chuỗi (DISPUTE)": Gọi hàm `disputeCopyright` trên Smart Contract,
+        chuyển trạng thái on-chain sang `DISPUTED`, đồng bộ CSDL sang `DISPUTED`.
+      * "Giải quyết: Khôi phục Hiệu lực (RESOLVE -> ACTIVE)": Gọi hàm `resolveDispute`, chuyển trạng thái
+        on-chain về `ACTIVE`, khôi phục bản ghi CSDL về `ON_CHAIN`.
+      * "Giải quyết: Thu hồi Vĩnh viễn (REVOKE)": Gọi hàm `revokeCopyright` hoặc `resolveDispute(REVOKED)`,
+        chuyển trạng thái on-chain sang `REVOKED`, cập nhật bản ghi CSDL sang `WITHDRAWN`.
+
+2.3. Phân hệ Quản trị Smart Contract & Cầu dao khẩn cấp (Governance & Circuit Breaker):
+- Truy cập `/admin`, chọn Tab "QUẢN TRỊ SMART CONTRACT" (`GOVERNANCE`):
+  * Hiển thị địa chỉ hợp đồng đang kết nối (`0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44`), Chain ID (`31337`),
+    và trạng thái khối RPC.
+  * Trạng thái Cầu dao (Circuit Breaker Status): Đang hoạt động (`BÌNH THƯỜNG / ACTIVE`) hoặc (`TẠM DỪNG / PAUSED`).
+  * Nút chuyển đổi trạng thái (Tạm dừng đăng ký / Khôi phục đăng ký) có hộp thoại nhập lý do giải trình.
+  * Khi hợp đồng bị tạm dừng, mọi giao dịch `registerCopyright` đều bị từ chối ở cấp độ Smart Contract.
+
+2.4. Cảnh báo Bản quyền Thời gian thực (Real-time Warning System):
+- Tại `/book/:id`: Nếu sách có bản ghi đang tranh chấp (`DISPUTED`), hệ thống hiển thị banner cảnh báo
+  màu hổ phách "CẢNH BÁO: TÁC PHẨM ĐANG CÓ TRANH CHẤP BẢN QUYỀN". Nếu đã bị thu hồi (`REVOKED`), hiển thị
+  banner màu đỏ "BẢN QUYỀN ĐÃ BỊ THU HỒI ON-CHAIN".
+- Tại `/verify`: Chứng chỉ bản quyền điện tử tự động đổi màu huy hiệu:
+  * Xanh ngọc lục bảo (Emerald): "CHỨNG CHỈ BẢN QUYỀN HỢP LỆ TRÊN BLOCKCHAIN (ACTIVE)".
+  * Hổ phách (Amber): "HỒ SƠ BẢN QUYỀN ĐANG TRANH CHẤP (DISPUTED)".
+  * Đỏ ruby (Crimson): "BẢN QUYỀN ĐÃ BỊ THU HỒI (REVOKED)".
+
+================================================================================
+3. CÁC TỆP TIN THAY ĐỔI VÀ TẠO MỚI
+================================================================================
+
+3.1. Tạo mới (7 files):
+1. `server/repositories/reportRepository.ts`
+   - Quản lý thao tác CSDL cho `dbo.Reports` và `dbo.ReportActions`.
+2. `server/services/reportService.ts`
+   - Nghiệp vụ khiếu nại, kiểm tra phân quyền, xử lý audit trail và thực thi on-chain.
+3. `server/controllers/reportController.ts`
+   - Điều khiển request/response cho người dùng và admin.
+4. `server/routes/reportRoutes.ts`
+   - Router `/api/reports` cho các hành động của người dùng.
+5. `src/components/dispute/ReportModal.tsx` & `src/components/dispute/ReportModal.css`
+   - Modal giao diện gửi khiếu nại vi phạm bản quyền.
+6. `tests/step05_dispute_management.test.ts`
+   - Bộ 18 bài kiểm thử tự động toàn diện cho Bước 05.
+7. `STEP_05_REPORT.txt`
+   - Báo cáo nghiệm thu kỹ thuật chính thức Bước 05.
+
+3.2. Cập nhật (11 files):
+1. `server/blockchain/contractClient.ts`:
+   - Tích hợp `disputeCopyright`, `resolveDispute`, `revokeCopyright`, `pauseContract`, `unpauseContract`, `isPaused`.
+   - Bổ sung `getNextNonce()` gửi RPC trực tiếp để xử lý nonce tự động, loại bỏ hoàn toàn lỗi "Nonce too low".
+2. `server/repositories/copyrightRepository.ts`:
+   - Bổ sung `getCopyrightRecordById` và hoàn thiện tính an toàn idempotent cho `createBlockchainTransaction`.
+3. `server/routes/adminRoutes.ts`:
+   - Bổ sung endpoints quản lý khiếu nại và cầu dao khẩn cấp.
+4. `server/app.ts`:
+   - Mount router `/api/reports`.
+5. `src/services/api.ts`:
+   - Khai báo kiểu TypeScript và API client cho `reportApi` và `adminApi` mở rộng.
+6. `src/pages/AdminDashboard.tsx` & `AdminDashboard.css`:
+   - Tái cấu trúc thành 3 tab điều hành (`INVITATIONS`, `DISPUTES`, `GOVERNANCE`).
+7. `src/pages/BookDetail.tsx`:
+   - Tích hợp cảnh báo tranh chấp, modal khiếu nại và huy hiệu lịch sử bản quyền.
+8. `src/pages/Verify.tsx`:
+   - Bổ sung hiển thị trạng thái DISPUTED/REVOKED và nút mở khiếu nại.
+9. `src/i18n/vi.ts`:
+   - Bổ sung toàn bộ từ khóa tiếng Việt cho phân hệ khiếu nại và quản trị.
+10. `src/i18n/en.ts`:
+    - Bổ sung toàn bộ từ khóa tiếng Anh tương ứng.
+11. `PROJECT_NOTES.txt` & `AI_LOG.md`:
+    - Cập nhật nhật ký kỹ thuật và kiến trúc hoàn thiện Bước 05.
+
+================================================================================
+4. KẾT QUẢ KIỂM THỬ VÀ XÁC MINH THỰC TẾ
+================================================================================
+
+4.1. Kết quả chạy bộ kiểm thử hệ thống (Vitest):
+- Lệnh: `npm test`
+- Kết quả: **7/7 test suites PASSED, 102/102 tests PASSED (100%)**
+  * `tests/step05_dispute_management.test.ts`: **18/18 tests PASSED**
+    - Kiểm tra tạo khiếu nại (yêu cầu đăng nhập, kiểm tra độ dài mô tả, đối tượng hợp lệ).
+    - Kiểm tra Admin lấy danh sách khiếu nại, lọc theo trạng thái, xem chi tiết và timeline kiểm toán.
+    - Kiểm tra Admin đổi trạng thái và thêm ghi chú nội bộ.
+    - Kiểm tra thực thi on-chain dispute: Smart Contract chuyển sang `DISPUTED`, CSDL đồng bộ sang `DISPUTED`.
+    - Kiểm tra thực thi on-chain resolve: Smart Contract khôi phục về `ACTIVE` hoặc chuyển sang `REVOKED`.
+    - Kiểm tra Cầu dao khẩn cấp (Circuit Breaker): Admin `pause` thành công; khi pause, `registerCopyright`
+      bị Smart Contract từ chối; Admin `unpause` khôi phục bình thường.
+  * `tests/step04_copyright_integration.test.ts`: **14/14 tests PASSED**
+  * `tests/step02_1_invitations.test.ts`: **19/19 tests PASSED**
+  * `tests/step02_books.test.ts`: **22/22 tests PASSED**
+  * `tests/api.test.ts`: **13/13 tests PASSED**
+  * `tests/step03_1_wallet.test.ts`: **9/9 tests PASSED**
+  * `tests/step03_blockchain_utils.test.ts`: **7/7 tests PASSED**
+
+4.2. Kết quả kiểm thử Smart Contract (Hardhat Mocha):
+- Lệnh: `npm run contracts:test`
+- Kết quả: **29/29 tests PASSED (100%)**
+
+4.3. Kết quả kiểm tra quy chuẩn mã nguồn (Lint):
+- Lệnh: `npm run lint`
+- Kết quả: **0 errors** (129 warnings kiểu react hook thông thường, không có lỗi chặn mã).
+
+4.4. Kết quả kiểm tra biên dịch và đóng gói sản phẩm (Build):
+- Lệnh: `npm run build` (`tsc -b && vite build`)
+- Kết quả: **0 TypeScript errors, build production thành công trong 593ms**.
+
+================================================================================
+5. VẤN ĐỀ CÒN TỒN TẠI VÀ GIỚI HẠN HIỆN TẠI
+================================================================================
+
+1. Môi trường triển khai công khai (Ethereum Sepolia & IPFS):
+   - Mã nguồn đã hoàn thiện đầy đủ kiến trúc và kịch bản kết nối.
+   - Hiện tại hệ thống vận hành trên Hardhat Local Node (Chain ID 31337) và Local Storage.
+   - Khi triển khai lên Production, chỉ cần cấu hình `SEPOLIA_RPC_URL`, `SEPOLIA_PRIVATE_KEY`
+     và các thông số IPFS vào file `.env`.
+2. Tài khoản quản trị thử nghiệm:
+   - Trong môi trường kiểm thử cục bộ, hệ thống đang dùng Hardhat Account #0
+     (`0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266`) có sẵn `DEFAULT_ADMIN_ROLE` và `REGISTRAR_ROLE`.
+     Trong môi trường thực tế, nên tách biệt địa chỉ ví của Admin và ví của Relay Server.
+
+================================================================================
+6. HƯỚNG DẪN CHẠY VÀ KIỂM TRA CHỨC NĂNG MỚI
+================================================================================
+
+Bước 1: Khởi động Hardhat Local Node (nếu chưa chạy):
+    npm run contracts:node
+
+Bước 2: Triển khai Smart Contract lên Node Local (nếu node vừa khởi động lại):
+    npm run contracts:deploy:local
+
+Bước 3: Khởi chạy ứng dụng Web và Backend Server:
+    npm run dev:all
+    - Frontend: http://localhost:5173
+    - Backend API: http://localhost:5000
+
+Bước 4: Kiểm tra luồng khiếu nại (Bạn đọc):
+    - Đăng nhập tài khoản bạn đọc bất kỳ (ví dụ: reader1@example.com / Password123!).
+    - Mở một cuốn sách đã có bản quyền (ví dụ sách ID 1).
+    - Nhấn nút "Khiếu nại bản quyền", chọn lý do và điền bằng chứng đối chiếu (>= 10 ký tự), nhấn "Gửi Khiếu nại".
+
+Bước 5: Kiểm tra luồng xử lý và phán quyết (Admin):
+    - Đăng nhập tài khoản Quản trị viên (admin@bookchain.local / AdminPass123!).
+    - Truy cập trang Quản trị (`/admin`), chọn tab "KHIẾU NẠI & TRANH CHẤP".
+    - Mở hồ sơ khiếu nại vừa tạo, kiểm tra bằng chứng, thêm ghi chú nội bộ.
+    - Nhấn "Kích hoạt Tranh chấp (DISPUTE)" -> Quan sát trạng thái on-chain và CSDL chuyển sang DISPUTED.
+    - Quay lại trang chi tiết sách (`/book/:id`) hoặc `/verify` để quan sát banner cảnh báo màu hổ phách.
+    - Quay lại Admin Dashboard, nhấn "Giải quyết: Thu hồi Vĩnh viễn (REVOKE)" hoặc "Giải quyết: Khôi phục Hiệu lực (ACTIVE)"
+      để hoàn tất vòng đời tranh chấp.
+
+Bước 6: Kiểm tra Cầu dao khẩn cấp:
+    - Trong `/admin`, chọn tab "QUẢN TRỊ SMART CONTRACT".
+    - Nhấn "Tạm dừng Smart Contract (PAUSE)", nhập lý do.
+    - Thử đăng ký bản quyền một tác phẩm mới -> Smart Contract sẽ từ chối với lỗi EnforcedPause.
+    - Nhấn "Khôi phục Đăng ký (UNPAUSE)" -> Hệ thống hoạt động bình thường trở lại.
+
+================================================================================
+7. KẾT LUẬN NGHIỆM THU
+================================================================================
+
+Dựa trên toàn bộ bằng chứng kiểm thử thực tế:
+- 102/102 unit/integration tests trên Vitest đạt kết quả PASSED.
+- 29/29 tests Smart Contract trên Hardhat đạt kết quả PASSED.
+- 0 lỗi linter (Oxlint).
+- Build production TypeScript và Vite thành công 100%.
+- Cơ chế tranh chấp bản quyền, nhật ký kiểm toán, đồng bộ CSDL SQL Server và cầu dao khẩn cấp hoạt động chính xác.
+
+KẾT LUẬN CHÍNH THỨC: >>> PASS (ĐẠT 100% TIÊU CHÍ NGHIỆM THU BƯỚC 05) <<<
+================================================================================

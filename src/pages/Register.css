@@ -1,0 +1,81 @@
+.bg-surface {
+  background-color: var(--color-surface);
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stepper-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-2);
+  color: var(--color-ink-muted);
+  position: relative;
+  z-index: 2;
+}
+
+.stepper-step.active {
+  color: var(--color-interactive);
+}
+
+.stepper-step.current .step-circle {
+  border-color: var(--color-interactive);
+  background-color: var(--color-surface);
+  color: var(--color-interactive);
+}
+
+.step-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--color-surface);
+  border: 2px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.stepper-step.active .step-circle {
+  background-color: var(--color-interactive);
+  border-color: var(--color-interactive);
+  color: var(--color-surface);
+}
+
+.stepper-line {
+  flex: 1;
+  height: 2px;
+  background-color: var(--color-border);
+  margin: 0 var(--spacing-4);
+  margin-top: -20px; /* Align with circle centers roughly */
+  z-index: 1;
+}
+
+.stepper-line.active {
+  background-color: var(--color-interactive);
+}
+
+.form-input {
+  background-color: transparent;
+  outline: none;
+  font-family: var(--font-sans);
+}
+
+.form-input:focus {
+  border-color: var(--color-interactive);
+}
+
+.border-b { border-bottom: 1px solid var(--color-border); }
+.border-t { border-top: 1px solid var(--color-border); }
+.pb-2 { padding-bottom: var(--spacing-2); }
+.invisible { visibility: hidden; }
+
+@media (max-width: 768px) {
+  .step-label {
+    display: none;
+  }
+}

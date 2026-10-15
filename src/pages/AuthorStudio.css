@@ -1,0 +1,207 @@
+/* AuthorStudio.css — BookChain Archival Author Workspace */
+
+.author-studio-root {
+  min-height: calc(100vh - 64px);
+  background-color: var(--color-ground);
+  color: var(--color-ink);
+  padding-bottom: 5rem;
+}
+
+.studio-hero {
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+}
+
+.studio-tabs-bar {
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.studio-tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-ink-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.studio-tab-btn:hover {
+  color: var(--color-ink);
+  background-color: var(--surface-hover);
+}
+
+.studio-tab-btn.active {
+  color: var(--color-ink);
+  border-bottom-color: var(--color-accent);
+  font-weight: 700;
+}
+
+/* Author Studio Filter Toolbar */
+.studio-filter-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.studio-search-wrapper {
+  position: relative;
+  flex: 1 1 240px;
+  max-width: 380px;
+}
+
+.studio-search-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem 0.5rem 2.25rem;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+  transition: border-color 0.15s ease;
+}
+
+.studio-search-input:focus {
+  outline: none;
+  border-color: var(--color-interactive);
+}
+
+.studio-search-icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-ink-muted);
+  pointer-events: none;
+}
+
+/* Book Item Cards */
+.book-item-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  padding: 1.5rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .book-item-card {
+    flex-direction: column;
+    padding: 1rem;
+  }
+}
+
+.book-item-card:hover {
+  border-color: var(--color-ink-muted);
+}
+
+.book-card-actions {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  min-width: 190px;
+  border-left: 1px solid var(--color-border);
+  padding-left: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .book-card-actions {
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+    padding-left: 0;
+    padding-top: 1rem;
+    width: 100%;
+  }
+
+  .book-card-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Modals */
+.studio-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(10, 10, 10, 0.75);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.studio-modal-box {
+  width: 100%;
+  max-width: 540px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+}
+
+.studio-modal-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-ground);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.studio-modal-body {
+  padding: 1.25rem;
+}
+
+.studio-form-group {
+  margin-bottom: 1rem;
+}
+
+.studio-form-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--color-ink-muted);
+  margin-bottom: 0.35rem;
+}
+
+.studio-form-control {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+}
+
+.studio-form-control:focus {
+  outline: none;
+  border-color: var(--color-interactive);
+}

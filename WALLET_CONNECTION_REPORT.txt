@@ -1,0 +1,164 @@
+================================================================================
+BÁO CÁO NGHIỆM THU KỸ THUẬT: KẾT NỐI METAMASK & HARDHAT LOCAL
+DỰ ÁN: BOOKCHAIN LIBRARY — DIGITAL LIBRARY & BLOCKCHAIN COPYRIGHT REGISTRY
+Giai đoạn: Chuẩn bị tiền tích hợp Bước 04
+Thời điểm: 14/10/2026
+Môi trường: Windows, React 19, Vite 8, TypeScript, Ethers.js v6, Hardhat Local (31337)
+================================================================================
+
+1. HIỆN TRẠNG BAN ĐẦU
+--------------------------------------------------------------------------------
+- Trên thanh điều hướng (Navbar), nút "Connect Wallet" hiển thị dưới dạng một nút
+  giao diện có biểu tượng ví và chữ, nhưng khi người dùng click thì hoàn toàn
+  không có phản hồi, không mở popup MetaMask, và không có thông báo lỗi hay trạng
+  thái gì được cập nhật trên giao diện.
+- Người dùng đang chạy tiến trình node blockchain `npm run contracts:node` trên
+  cổng local 8545 (Chain ID 31337).
+
+2. NGUYÊN NHÂN THỰC TẾ ĐÃ XÁC ĐỊNH (CÓ BẰNG CHỨNG TỪ SOURCE CODE)
+--------------------------------------------------------------------------------
+1. Nút bấm không gắn trình xử lý sự kiện (Unattached DOM Event Handler):
+   - Kiểm tra `src/components/layout/Navbar.tsx` (dòng 115-118):
+     ```tsx
+     <button className="nav-action-wallet flex items-center gap-2">
+       <Wallet size={18} />
+       <span className="text-sm font-medium hidden-mobile">{t('nav.connectWallet')}</span>
+     </button>
+     ```
+     -> Nút bấm hoàn toàn không có thuộc tính `onClick`. Đây là nút tĩnh (static HTML),
+        do đó việc người dùng click chuột không bao giờ kích hoạt bất kỳ tác vụ nào.
+
+2. Thiếu tầng State/Context quản lý ví Web3 (Missing Wallet Layer):
+   - Trong `src/contexts/`, dự án chỉ có `AuthContext`, `I18nContext`, và `ThemeContext`.
+     Chưa từng có `WalletContext` hay custom hook để tương tác với `window.ethereum`,
+     yêu cầu quyền truy cập tài khoản, lắng nghe `accountsChanged` hoặc `chainChanged`.
+
+3. Node Hardhat Local bị xóa bộ nhớ khi khởi động lại (In-Memory State Reset):
+   - Khi kiểm tra mã máy (bytecode) bằng lệnh JSON-RPC `eth_getCode` tại địa chỉ cấu hình
+     `0x5FbDB2315678afecb367f032d93F642f64180aa3` trên node đang chạy (`http://127.0.0.1:8545`),
+     kết quả trả về là `0x` (rỗng, length = 2).
+   - Nguyên nhân: Tiến trình `npm run contracts:node` đã được khởi động lại sau lần deploy
+     trước, làm mất dữ liệu RAM của node Hardhat.
+   - Khắc phục: Đã chạy `npm run contracts:deploy:local` lên node localhost đang chạy,
+     khôi phục đầy đủ bytecode (14,494 hex chars) và xác minh `totalRecords()` hoạt động.
+
+3. DANH SÁCH FILE THAY ĐỔI
+--------------------------------------------------------------------------------
+A. File tạo mới:
+1. `src/types/ethereum.d.ts` — Type declarations cho `window.ethereum` và `EthereumProvider`.
+2. `src/contexts/WalletContext.tsx` — Context quản lý vòng đời kết nối ví, mạng, và hợp đồng.
+3. `src/components/layout/WalletButton.tsx` — Component nút bấm và dropdown thông tin ví.
+4. `tests/step03_1_wallet.test.ts` — Bộ 9 bài kiểm thử đơn vị cho kết nối ví và node local.
+5. `WALLET_CONNECTION_REPORT.txt` — Báo cáo nghiệm thu kỹ thuật này.
+
+B. File chỉnh sửa:
+1. `package.json` — Bổ sung `"ethers": "^6.17.0"` vào dependencies của frontend.
+2. `src/main.tsx` — Bọc `<WalletProvider>` trong cây component ứng dụng.
+3. `src/components/layout/Navbar.tsx` — Tích hợp `<WalletButton />` thay thế nút tĩnh.
+4. `src/components/layout/Navbar.css` — Bổ sung CSS cho nút kết nối, chấm pulse xanh, dropdown.
+5. `src/i18n/en.ts` & `src/i18n/vi.ts` — Bổ sung 14 từ khóa đa ngôn ngữ về ví và hợp đồng.
+6. `PROJECT_NOTES.txt` — Cập nhật tài liệu kỹ thuật phân hệ kết nối ví.
+7. `AI_LOG.md` — Ghi nhật ký thực hiện chi tiết.
+
+4. CÁCH HOẠT ĐỘNG SAU KHI SỬA
+--------------------------------------------------------------------------------
+1. Luồng yêu cầu kết nối an toàn:
+   - Khi mở trang: Ứng dụng KHÔNG tự ý bật popup kết nối (chỉ kiểm tra thầm lặng qua
+     `eth_accounts` nếu người dùng đã cấp quyền trước đó).
+   - Khi nhấn nút "Connect Wallet": Kích hoạt `window.ethereum.request({ method: 'eth_requestAccounts' })`.
+   - Hiển thị spinner và chữ "Connecting..." để chống người dùng click nhiều lần (debounce).
+   - Nếu MetaMask chưa cài đặt: Hiển thị thông báo hướng dẫn cài đặt extension.
+   - Nếu người dùng từ chối (error code 4001): Hiển thị thông báo từ chối lịch sự, không crash.
+   - Nếu có yêu cầu đang chờ (error code -32002): Nhắc nhở người dùng mở cửa sổ MetaMask.
+
+2. Hiển thị trạng thái & Nhận biết sự kiện mạng:
+   - Đã kết nối: Nút chuyển sang dạng pill sang trọng với chấm xanh pulse hoạt họa,
+     hiển thị địa chỉ rút gọn (ví dụ: `0xf39F...2266`).
+   - Click vào nút: Mở popover lưu trữ (Archival panel) hiển thị:
+     * Địa chỉ ví đầy đủ kèm nút sao chép (Copy) tiện lợi.
+     * Địa chỉ Hợp đồng Sổ cái (`0x5FbDB2315678afecb367f032d93F642f64180aa3`).
+     * Trạng thái xác minh hợp đồng trực tiếp: "✓ Đã xác minh trên node Local"
+       (kèm số lượng bản ghi on-chain hiện có: 0 bản ghi).
+     * Mạng và Chain ID (31337 / 0x7a69).
+     * Nút "Ngắt kết nối" (Disconnect) an toàn.
+   - Đổi tài khoản trong MetaMask (`accountsChanged`): Tự động cập nhật tức thì trên giao diện;
+     nếu khóa ví hoặc ngắt kết nối thì giao diện tự động quay về nút "Connect Wallet".
+   - Sai mạng (`chainChanged`): Nếu người dùng đang ở mạng khác (ví dụ Mainnet hay Sepolia),
+     nút hiển thị huy hiệu màu hổ phách "Sai mạng" kèm nút "Switch 31337". Người dùng click
+     để MetaMask tự động chuyển hoặc thêm mạng Hardhat Local vào ví.
+
+5. CHAIN ID, ĐỊA CHỈ CONTRACT VÀ NGUỒN ABI ĐÃ XÁC MINH
+--------------------------------------------------------------------------------
+- Mục tiêu mạng: Hardhat Local
+- RPC URL: http://127.0.0.1:8545
+- Chain ID Hex: `0x7a69`
+- Chain ID Decimal: `31337`
+- Địa chỉ Hợp đồng: `0x5FbDB2315678afecb367f032d93F642f64180aa3`
+- Nguồn ABI: `src/contracts/BookCopyrightRegistry.json` & `BookCopyrightRegistry.ts`
+- Xác minh bytecode thực tế trên node: 14,494 ký tự hex.
+- Xác minh hàm đọc `totalRecords()`: Thành công, trả về 0.
+
+6. CÁC LỆNH ĐÃ CHẠY VÀ KẾT QUẢ THỰC TẾ
+--------------------------------------------------------------------------------
+1. `npm run contracts:deploy:local`
+   - Triển khai hợp đồng `BookCopyrightRegistry` lên node đang chạy `http://127.0.0.1:8545`.
+   - Kết quả: Thành công (Contract: `0x5FbDB2315678afecb367f032d93F642f64180aa3`, Block: 1).
+2. `npm run test`
+   - Chạy toàn bộ bộ kiểm thử tự động của dự án (Vitest).
+   - Kết quả: **5/5 test files, 70/70 tests PASSED (100%)**.
+   - Bài test mới `tests/step03_1_wallet.test.ts` (9 tests) đã gọi trực tiếp JSON-RPC tới
+     cổng 8545 và xác minh thành công Chain ID, bytecode, và đọc hàm `totalRecords()`.
+3. `npm run contracts:test`
+   - Chạy 29 bài unit tests hợp đồng thông minh (Hardhat Mocha).
+   - Kết quả: **29/29 tests PASSED (100%)**.
+4. `npm run lint`
+   - Kiểm tra mã nguồn bằng Oxlint.
+   - Kết quả: **0 errors**.
+5. `npm run build`
+   - Biên dịch TypeScript và đóng gói Vite production bundle.
+   - Kết quả: **Thành công (1.29s)**, xuất bundle ra thư mục `dist/`.
+
+7. ĐÁNH GIÁ CÁC KIỂM THỬ ĐÃ THỰC HIỆN VÀ CHƯA THỰC HIỆN
+--------------------------------------------------------------------------------
+- Đã kiểm thử tự động (Automated Tests PASS):
+  * Cấu hình và hằng số mạng Hardhat Local: ĐÃ ĐẠT.
+  * Tính toàn vẹn ABI và địa chỉ triển khai: ĐÃ ĐẠT.
+  * Kết nối JSON-RPC thực tế và gọi hàm đọc on-chain: ĐÃ ĐẠT.
+  * Các hàm tiện ích rút gọn địa chỉ: ĐÃ ĐẠT.
+  * Không làm ảnh hưởng 61 bài test tích hợp cũ của Bước 01, 02, 02.1: ĐÃ ĐẠT.
+  * Build và Lint không phát sinh lỗi: ĐÃ ĐẠT.
+- Chưa thể tự động hóa (Cần người dùng xác nhận trên trình duyệt):
+  * Việc bấm nút vật lý để MetaMask extension (trên Chrome/Brave/Edge của người dùng)
+    bật popup và click nút "Next -> Connect" đòi hỏi thao tác tương tác của con người
+    hoặc môi trường test extension chuyên biệt.
+
+8. HƯỚNG DẪN NGƯỜI DÙNG TỰ KIỂM TRA TRÊN TRÌNH DUYỆT
+--------------------------------------------------------------------------------
+Bước 1: Đảm bảo node Hardhat Local vẫn đang chạy trong terminal:
+    npm run contracts:node (đã và đang chạy trên cổng 8545)
+
+Bước 2: Khởi động giao diện website (nếu chưa chạy):
+    npm run dev:all  (hoặc npm run dev)
+
+Bước 3: Mở trình duyệt truy cập: http://localhost:5173
+
+Bước 4: Kiểm tra nút "Connect Wallet":
+    - Nhấp vào nút "Connect Wallet" ở góc trên bên phải thanh điều hướng.
+    - Cửa sổ MetaMask sẽ bật lên yêu cầu cấp quyền kết nối.
+    - Chọn tài khoản và nhấn "Connect".
+
+Bước 5: Kiểm tra trạng thái:
+    - Nếu ví đang ở mạng khác (ví dụ Sepolia hay Ethereum Mainnet): Nút sẽ hiện cảnh báo
+      màu hổ phách "Sai mạng" / "Switch 31337". Nhấp vào để MetaMask chuyển sang Hardhat Local.
+    - Nếu đang ở Hardhat Local (Chain 31337): Nút hiển thị chấm xanh pulse và địa chỉ rút gọn.
+    - Nhấp vào nút để mở bảng thông tin: Kiểm tra địa chỉ ví, nút copy, và dòng trạng thái:
+      "✓ Đã xác minh trên node Local" kèm số lượng bản ghi on-chain.
+    - Thử đổi tài khoản hoặc khóa ví trong MetaMask để quan sát giao diện cập nhật mượt mà.
+
+9. NHỮNG TỒN ĐỌNG CẦN LƯU Ý TRƯỚC BƯỚC 04
+--------------------------------------------------------------------------------
+- Nếu người dùng tắt và bật lại lệnh `npm run contracts:node`, Hardhat node sẽ reset bộ nhớ.
+  Khi đó, chỉ cần chạy một lần lệnh `npm run contracts:deploy:local` để nạp lại hợp đồng.
+- Nền tảng kết nối ví hiện đã sẵn sàng 100% để phục vụ Bước 04 (khi tác giả đăng ký bản quyền
+  sách và ký số giao dịch bằng MetaMask).
+================================================================================

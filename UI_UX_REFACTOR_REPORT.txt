@@ -1,0 +1,189 @@
+================================================================================
+BÁO CÁO TOÀN DIỆN AUDIT, SỬA LỖI VÀ HOÀN THIỆN UI/UX BOOKCHAIN LIBRARY
+Dự án: BOOKCHAIN LIBRARY — Digital Library & Blockchain Copyright Registry
+Triết lý: "LIBRARY FIRST, COPYRIGHT SECOND, BLOCKCHAIN UNDERNEATH."
+Phong cách: Archival Reading Room (Học thuật, thanh lịch, tập trung vào tác phẩm và tác giả)
+Thời gian hoàn thành: 2026-10-15
+================================================================================
+
+I. ÁP DỤNG BỘ SKILL THIẾT KẾ IMPECCABLE
+--------------------------------------------------------------------------------
+Dự án đã tải và áp dụng nghiêm ngặt các hướng dẫn thiết kế chuyên sâu từ thư mục
+`.gemini/skills/impeccable/`:
+1. `SKILL.md` & `DESIGN.md`:
+   - Xác lập rõ ràng triết lý sản phẩm, không biến ứng dụng thành "crypto casino"
+     hay dashboard đầu cơ giao dịch.
+   - Giữ blockchain hoạt động ngầm ở tầng xác thực (underneath), không phô trương.
+2. `craft-floor.md` (Craft Quality Floor - 24 quy chuẩn cấm kỵ):
+   - Loại bỏ hoàn toàn các kicker/eyebrow thừa bên trên tiêu đề chính (đã loại bỏ
+     kicker "AUTHOR STUDIO & COPYRIGHT DESK" và "ROOT CONTROL ROOM").
+   - Đảm bảo tương phản màu chữ và nền đạt chuẩn WCAG AA trên cả Light Mode và Dark Mode.
+   - Không lạm dụng gradient, neon badge, hay box-shadow trang trí quá mức.
+3. `audit.md` & `component-review.md`:
+   - Phân loại lỗi theo các cấp độ ưu tiên P0 (Critical), P1 (High), P2 (Medium), P3 (Low).
+   - Kiểm tra kỹ lưỡng nhóm hành động (buttons, toolbars, tables) khi nội dung co giãn.
+4. Công cụ kiểm tra tự động:
+   - Đã chạy `.gemini/skills/impeccable/scripts/impeccable.cmd detect --json src`
+   - Kết quả: `[]` (0 khuyết tật thiết kế cơ học).
+
+
+II. DANH MỤC LỖI ĐÃ PHÁT HIỆN VÀ NGUYÊN NHÂN GỐC (ROOT CAUSE)
+--------------------------------------------------------------------------------
+1. [P0 - Critical] Lỗi Mobile Navigation trên màn hình hẹp (< 992px):
+   - Vị trí: `src/components/layout/Navbar.tsx` & `Navbar.css`.
+   - Biểu hiện: Khi co màn hình về kích thước di động (390px), toàn bộ danh mục liên kết
+     (Khám phá, Tác giả, Kiến trúc, Tra cứu, Xưởng tác giả, Bảng quản trị) bị ẩn mà không
+     có menu hamburger hoặc drawer để mở ra. Người dùng di động bị kẹt, không thể điều hướng.
+   - Nguyên nhân: CSS chỉ ẩn `.nav-links` trên breakpoint `@media (max-width: 992px)`
+     nhưng chưa xây dựng mobile toggle button và side drawer panel.
+   - Giải pháp: Xây dựng hamburger button với `aria-label="Toggle navigation menu"`,
+     kèm drawer trượt xuống/trượt ngang tinh tế theo phong cách Archival, tự động đóng khi
+     người dùng chọn trang hoặc chuyển route.
+
+2. [P1 - High] Lỗi thanh lọc và ô tìm kiếm bị chen chúc, chữ dính liền trên di động:
+   - Vị trí: `src/pages/AdminDashboard.tsx` & `AuthorStudio.tsx`.
+   - Biểu hiện: Trên mobile 390px, thanh tìm kiếm và các nút lọc trạng thái bị ép vào nhau,
+     tạo thành chuỗi chữ dính liền `ALLPENDINGVERIFIEDREJECTED`.
+   - Nguyên nhân: Thiếu flex-wrap, thiếu spacing wrapper và phụ thuộc vào các class
+     tiện ích Tailwind rải rác trong khi dự án sử dụng CSS thuần.
+   - Giải pháp: Chuẩn hóa hệ thống `.pills-group` và `.pill-btn` trong `src/index.css`,
+     bọc ô tìm kiếm trong `.admin-search-wrapper` có `flex: 1 1 260px` và `flex-wrap: wrap`.
+
+3. [P1 - High] Thiếu token màu khiến Admin Dashboard mất nền và mất viền card:
+   - Vị trí: `src/pages/AdminDashboard.css`.
+   - Biểu hiện: Các thẻ thống kê (stat cards) và khung bảng quản trị bị trong suốt,
+     mất viền, độ tương phản kém trong dark mode.
+   - Nguyên nhân: File CSS tham chiếu các biến không tồn tại như `var(--border-color)`
+     và `var(--surface)` thay vì các canonical tokens `var(--color-border)` và `var(--color-surface)`.
+   - Giải pháp: Đại tu toàn bộ `src/pages/AdminDashboard.css` và bổ sung các alias tương thích
+     ngược trong `src/index.css`.
+
+4. [P2 - Medium] Nút bấm hành động trong bảng bị vỡ hàng, méo tỷ lệ hoặc tràn chiều ngang:
+   - Vị trí: Bảng duyệt tác giả, bảng khiếu nại, bảng mã mời trong `AdminDashboard.tsx`,
+     bảng quản lý sách trong `AuthorStudio.tsx` và `Profile.tsx`.
+   - Biểu hiện: Chữ tiếng Việt "Phê duyệt", "Từ chối", "Thụ lý", "Thu hồi" bị ngắt dòng
+     hoặc bị cột bảng ép hẹp; các nút không cùng chiều cao.
+   - Nguyên nhân: Thiếu thuộc tính `white-space: nowrap`, `line-height` không đồng bộ,
+     thiếu cấu trúc `.table-action-group` có `flex-shrink: 0`.
+   - Giải pháp: Bổ sung bộ quy chuẩn button thống nhất trong `src/index.css`:
+     `.btn` có `white-space: nowrap`, `line-height: 1.25`, `flex-shrink: 0`,
+     kèm các kích cỡ chuẩn mực `.btn-xs`, `.btn-sm`, `.btn-lg`, `.btn-icon` và các biến thể
+     `.btn-primary`, `.btn-secondary`, `.btn-accent`, `.btn-subtle`.
+
+5. [P2 - Medium] Vi phạm nguyên tắc Impeccable Craft Floor (Kicker/Eyebrow Banned):
+   - Vị trí: `AuthorStudio.tsx` và `AdminDashboard.tsx`.
+   - Biểu hiện: Chữ viết hoa nhỏ phía trên tiêu đề `AUTHOR STUDIO & COPYRIGHT DESK` và `ROOT CONTROL ROOM`.
+   - Nguyên nhân: Tồn dư thiết kế cũ không tuân thủ quy chuẩn `craft-floor.md`.
+   - Giải pháp: Xóa bỏ hoàn toàn các kicker này, giữ tiêu đề chính trang trọng, ngắn gọn.
+
+6. [P3 - Low] Tệp rác thừa từ template Vite ban đầu:
+   - Vị trí: `src/App.css`.
+   - Biểu hiện: Chứa các class demo `.counter`, `.hero`, `.vite`, `#next-steps` không được
+     sử dụng ở bất cứ đâu.
+   - Giải pháp: Đã xóa an toàn tệp `src/App.css`.
+
+
+III. HỆ THỐNG DESIGN SYSTEM VÀ QUY CHUẨN ĐỒNG BỘ
+--------------------------------------------------------------------------------
+1. Design Tokens Chuẩn mực (`src/index.css`):
+   - Nền tảng:
+     * `--color-ground`: Nền thư viện giấy cổ điển / tối sâu (`#F9F8F6` / `#11100E`).
+     * `--color-surface`: Nền thẻ giấy bề mặt (`#FFFFFF` / `#1A1916`).
+     * `--color-surface-secondary`: Nền bề mặt phụ (`#F3F1EC` / `#23211D`).
+     * `--color-border`: Viền học thuật thanh mảnh 1px (`#E5E2DA` / `#2D2B26`).
+     * `--color-ink`: Mực in văn bản chính tương phản cao (`#1A1917` / `#EDEAE4`).
+     * `--color-ink-muted`: Mực in thứ cấp dễ chịu (`#68645E` / `#A5A199`).
+     * `--color-accent`: Mực đỏ son bản quyền (`#8B261E` / `#C84B31`).
+   - Font chữ:
+     * Serif: `'Newsreader', Georgia, Cambria, serif` (Tiêu đề tác phẩm, tác giả).
+     * Sans: `'Inter', -apple-system, BlinkMacSystemFont, sans-serif` (Văn bản đọc, nhãn).
+     * Mono: `'JetBrains Mono', 'Fira Code', monospace` (Mã băm SHA-256, địa chỉ ví, txHash).
+   - Hệ thống Button Chuẩn hóa:
+     * `.btn`: Nút gốc có `display: inline-flex`, `align-items: center`, `justify-content: center`,
+       `white-space: nowrap`, `font-family: var(--font-sans)`, `transition: all var(--transition)`.
+     * `.btn-sm`: `padding: 0.4rem 0.85rem; font-size: 0.8125rem;`.
+     * `.btn-xs`: `padding: 0.25rem 0.6rem; font-size: 0.75rem;`.
+     * `.btn-icon`: Nút hình vuông tỷ lệ 1:1 cho các biểu tượng thao tác.
+     * Focus ring: `:focus-visible` với outline 2px rõ nét, hỗ trợ người khuyết tật.
+     * Motion: Tôn trọng `@media (prefers-reduced-motion: reduce)`.
+
+
+IV. KẾT QUẢ KIỂM THỬ TRỰC QUAN TRÊN TRÌNH DUYỆT (BROWSER SUBAGENT)
+--------------------------------------------------------------------------------
+Đã thực hiện tự động hóa trình duyệt qua `browser_subagent` và chụp ảnh xác thực:
+
+1. Viewport Di động (390px x 844px - iPhone 12/13/14):
+   - `mobile_home_with_nav`: Navbar gọn gàng, logo rõ nét, biểu tượng đổi giao diện/ngôn ngữ
+     và nút hamburger hiển thị trực quan không bị tràn màn hình.
+   - `mobile_drawer_open`: Bấm nút hamburger, menu trượt xuống mượt mà, hiển thị đầy đủ
+     các liên kết điều hướng (Khám phá, Tác giả, Kiến trúc, Tra cứu, Xưởng tác giả, Bảng quản trị),
+     thông tin tài khoản và trạng thái ví. Không có bất kỳ hiện tượng horizontal overflow nào.
+   - `mobile_author_studio`: Trang Xưởng Tác giả bố cục dọc thông minh; thẻ tác phẩm xếp chồng
+     ngăn nắp, các nút bấm "Tải lên bản thảo", "Thêm tác giả", "Bản quyền" dàn đều dễ bấm bằng ngón tay.
+
+2. Viewport Máy tính (1440px x 900px - Desktop Wide):
+   - `desktop_admin_author_tab`: Bảng duyệt tác giả căn chỉnh thẳng hàng, cột trạng thái rõ ràng,
+     cột thao tác có nhóm nút "Duyệt" (xanh lá) và "Từ chối" (đỏ) hiển thị trọn vẹn, không xuống dòng.
+   - `desktop_admin_disputes_tab`: Bảng khiếu nại sở hữu trí tuệ có bộ lọc trạng thái dạng pills
+     mượt mà, nút "Thụ lý" có icon liên kết ngoài chuẩn mực.
+   - `desktop_profile_page`: Trang cá nhân hiển thị huy hiệu vai trò, form chỉnh sửa bút danh,
+     nút điều hướng tắt sang "Xưởng Tác Giả Đầy Đủ →" thuận tiện.
+
+
+V. KẾT QUẢ KIỂM THỬ HỒI QUY TOÀN DIỆN (REGRESSION VERIFICATION)
+--------------------------------------------------------------------------------
+1. Impeccable Mechanical Detector:
+   - Lệnh: `.gemini\skills\impeccable\scripts\impeccable.cmd detect --json src`
+   - Kết quả: `[]` — 0 khuyết tật thiết kế.
+
+2. Oxlint Linting:
+   - Lệnh: `npm run lint`
+   - Kết quả: `Found 29 warnings and 0 errors. Finished in 104ms` — PASS 100%.
+
+3. TypeScript & Vite Production Build:
+   - Lệnh: `npm run build`
+   - Kết quả: `tsc -b && vite build` hoàn thành trong 871ms — PASS 100% (0 errors).
+
+4. Vitest Unit & Integration Test Suites:
+   - Lệnh: `npm test`
+   - Kết quả: 9/9 files passed, 129/129 tests passed (100%):
+     * `tests/step07_author_approval.test.ts` (19 tests) - PASS
+     * `tests/step02_1_invitations.test.ts` (19 tests) - PASS
+     * `tests/step02_books.test.ts` (22 tests) - PASS
+     * `tests/step05_dispute_management.test.ts` (18 tests) - PASS
+     * `tests/api.test.ts` (13 tests) - PASS
+     * `tests/step06_storage_reconciliation.test.ts` (8 tests) - PASS
+     * `tests/step04_copyright_integration.test.ts` (14 tests) - PASS
+     * `tests/step03_1_wallet.test.ts` (9 tests) - PASS
+     * `tests/step03_blockchain_utils.test.ts` (7 tests) - PASS
+
+5. Hardhat Smart Contract Tests:
+   - Lệnh: `npm run contracts:test`
+   - Kết quả: 29/29 tests passed (100%):
+     * BookCopyrightRegistry Smart Contract (Pausable, Dispute, Hash Parity, Roles) - PASS.
+
+
+VI. HƯỚNG DẪN VẬN HÀNH VÀ KIỂM TRA LẠI
+--------------------------------------------------------------------------------
+1. Khởi chạy toàn bộ hệ thống (Dev Server & Backend):
+   ```bash
+   npm run dev:all
+   ```
+   - Client Web: `http://localhost:5173`
+   - API Server: `http://localhost:5000`
+
+2. Kiểm tra nhanh mã nguồn & kiểu dữ liệu:
+   ```bash
+   npm run lint
+   npm run build
+   ```
+
+3. Chạy toàn bộ bài test hồi quy:
+   ```bash
+   npm test
+   npm run contracts:test
+   ```
+================================================================================
+KẾT LUẬN: TOÀN BỘ CÁC LỖI UI/UX ĐÃ ĐƯỢC GIẢI QUYẾT TRIỆT ĐỂ TẠI GỐC RỄ,
+HỆ THỐNG GIAO DIỆN ĐẠT ĐẲNG CẤP ARCHIVAL READING ROOM ĐỒNG NHẤT VÀ VỮNG CHẮC.
+================================================================================

@@ -1,0 +1,250 @@
+================================================================================
+BÁO CÁO NGHIỆM THU: BƯỚC 02.1 — ADMIN BOOTSTRAP & AUTHOR INVITATION SYSTEM
+DỰ ÁN: BOOKCHAIN LIBRARY — DIGITAL LIBRARY & BLOCKCHAIN COPYRIGHT REGISTRY
+================================================================================
+Thời điểm nghiệm thu: 2026-10-12
+Người thực hiện: Senior Full-stack Developer (Antigravity Agent)
+Trạng thái tổng thể: PASS (Hoàn thành 100% mục tiêu Bước 02.1)
+
+--------------------------------------------------------------------------------
+1. TÓM TẮT KẾT QUẢ VÀ TRẠNG THÁI THỰC TẾ
+--------------------------------------------------------------------------------
+- Nền tảng quản trị và phân quyền RBAC 3 cấp (READER, AUTHOR, ADMIN) đã được thiết lập chặt chẽ và nhất quán từ Database SQL Server, Backend Express TypeScript tới Frontend React 19.
+- Độc giả đăng ký mới (Register) luôn mặc định là vai trò READER. Không thể gửi request tự phong quyền AUTHOR hoặc ADMIN.
+- Đã triển khai cơ chế Bootstrap Quản trị viên (ADMIN) qua CLI có kiểm soát, an toàn, độc lập và bảo đảm tính Idempotent (chạy lại không trùng lặp dữ liệu).
+- Đã xác minh tài khoản ADMIN đầu tiên trong CSDL local: `minhtri@bookchain.io`.
+- Hệ thống mã mời tác giả (Author Invitation System) hoạt động với nguyên tắc bảo mật tối đa (Zero Raw Code Storage):
+  * Sinh mã CSPRNG ngẫu nhiên chuẩn Node.js `crypto.randomBytes`.
+  * Chỉ lưu chuỗi băm SHA-256 (`CodeHash`) vào CSDL SQL Server.
+  * Chuỗi mã nguyên bản (`BKC-XXXX-YYYY-ZZZZ`) chỉ trả về duy nhất 1 lần khi tạo mã thành công để Admin sao chép.
+  * API danh sách mã mời tuyệt đối không để lộ mã gốc lẫn CodeHash.
+  * Transaction SQL Server sử dụng gợi ý khóa dòng `WITH (UPDLOCK, ROWLOCK)` ngăn chặn hoàn toàn race condition và tình trạng sử dụng vượt số lượt cho phép (`MaxUses`).
+  * Người dùng đổi mã thành công lập tức được cấp vai trò `AUTHOR` và tự động làm mới `AuthContext`.
+- Giao diện Admin Dashboard (`/admin`) hoàn chỉnh theo phong cách "Archival Reading Room", hỗ trợ song ngữ EN/VI và Dark/Light mode, chặn truy cập đối với người dùng không có vai trò ADMIN.
+- Bộ test suite tự động đạt 54/54 tests PASS (13 test Bước 01, 22 test Bước 02, 19 test Bước 02.1).
+- Lint (Oxlint) đạt 0 errors, Build (Vite + TypeScript) thành công 100%.
+
+--------------------------------------------------------------------------------
+2. TÀI KHOẢN ADMIN: CƠ CHẾ BOOTSTRAP VÀ CÁCH XÁC MINH
+--------------------------------------------------------------------------------
+A. Nguyên tắc an toàn:
+- Không mở bất kỳ endpoint HTTP công khai nào để cấp quyền ADMIN.
+- Không tự động bootstrap hoặc tự nâng quyền trong mỗi lần server khởi động.
+- Không hardcode mật khẩu, mã bí mật hay token trong mã nguồn và log.
+- Chỉ người vận hành có quyền truy cập trực tiếp máy chủ mới chạy được script CLI.
+
+B. File triển khai: `server/scripts/bootstrapAdmin.ts`
+C. Cách thực hiện:
+   Lệnh thực tế:
+     npm run bootstrap:admin -- minhtri@bookchain.io
+   (Hoặc: npx tsx server/scripts/bootstrapAdmin.ts <email>)
+
+D. Kết quả thực thi thực tế:
+   ===============================================================
+   ADMIN BOOTSTRAP RESULT: SUCCESS
+   ===============================================================
+   User ID:      2E8AD25C-CCC5-F111-A448-8CA07185245A
+   Email:        minhtri@bookchain.io
+   Display Name: Minh Tri Triet
+   Roles:        READER, AUTHOR, ADMIN
+   Status:       User [minhtri@bookchain.io] is already an ADMIN. No duplicate assigned.
+   ===============================================================
+
+E. Xác minh trong SQL Server:
+   SELECT u.UserId, u.Email, r.RoleName
+   FROM dbo.Users u
+   JOIN dbo.UserRoles ur ON u.UserId = ur.UserId
+   JOIN dbo.Roles r ON ur.RoleId = r.RoleId
+   WHERE u.Email = 'minhtri@bookchain.io';
+   --> Trả về 3 dòng: READER, AUTHOR, ADMIN.
+
+--------------------------------------------------------------------------------
+3. QUY TRÌNH CẤP MÃ MỜI VÀ ĐỔI QUYỀN TÁC GIẢ (AUTHOR INVITATION FLOW)
+--------------------------------------------------------------------------------
+A. Tạo mã mời (Chỉ ADMIN đã đăng nhập):
+   1. ADMIN truy cập `/admin`, mở form "Tạo mã mời mới".
+   2. Chọn thời hạn hiệu lực (7, 14, 30, 90, 180, 365 ngày), số lượt sử dụng tối đa (mặc định: 1) và ghi chú (tùy chọn).
+   3. Backend xác thực session HttpOnly cookie + xác minh role ADMIN trong CSDL.
+   4. Sinh mã ngẫu nhiên: `generateInvitationCode()` dùng `crypto.randomBytes(6)` -> Định dạng `BKC-XXXX-YYYY-ZZZZ`.
+   5. Băm SHA-256 mã vừa tạo: `hashInvitationCode(rawCode)` -> chuỗi hex 64 ký tự `CodeHash`.
+   6. Lưu bản ghi vào `dbo.AuthorInvitations` với `CodeHash`, `CreatedByUserId`, `ExpiresAt`, `MaxUses`, `UsedCount = 0`, `Status = 'ACTIVE'`.
+   7. Backend trả về JSON:
+      { "invitationId": "...", "code": "BKC-XXXX-YYYY-ZZZZ", "expiresAt": "...", "maxUses": 1 }
+   8. Giao diện hiển thị Modal với mã đầy đủ và nút "Sao chép mã". Sau khi đóng modal, mã thô không thể xem lại.
+
+B. Quản lý và thu hồi mã mời:
+   1. ADMIN xem danh sách tại `/admin` (hiển thị thời hạn, số lượt đã dùng/tối đa, trạng thái).
+   2. Khi cần, ADMIN bấm nút "Thu hồi" kèm hộp thoại xác nhận.
+   3. Backend cập nhật `Status = 'REVOKED'`, `RevokedAt = GETDATE()`, `RevokedByUserId = @AdminId`.
+   4. Mã bị thu hồi lập tức bị từ chối nếu có ai cố gắng nhập.
+
+C. Đổi mã mời lấy quyền tác giả (Độc giả READER):
+   1. Độc giả đăng nhập, vào trang Hồ sơ cá nhân (`/profile`).
+   2. Giao diện hiển thị khối "Trở thành tác giả: Nhập mã mời".
+   3. Độc giả điền mã (Ví dụ: `BKC-A1B2-C3D4-E5F6`) và bấm "Kích hoạt quyền Tác giả".
+   4. Frontend gửi `POST /api/invitations/redeem` kèm `{ "code": "..." }`.
+   5. Backend mở SQL Transaction:
+      - Chuẩn hóa mã (trim, uppercase) và tính SHA-256 `CodeHash`.
+      - Khóa dòng đọc: `SELECT TOP 1 * FROM dbo.AuthorInvitations WITH (UPDLOCK, ROWLOCK) WHERE CodeHash = @CodeHash`.
+      - Kiểm tra tính hợp lệ:
+        * Tồn tại bản ghi? (Nếu không -> Báo lỗi 400).
+        * Trạng thái là 'ACTIVE'? (Nếu REVOKED hoặc EXHAUSTED -> Báo lỗi 400).
+        * Chưa hết hạn: `ExpiresAt > GETDATE()`? (Nếu đã quá hạn -> Báo lỗi 400).
+        * Còn lượt sử dụng: `UsedCount < MaxUses`? (Nếu đã hết -> Báo lỗi 400).
+        * Người dùng đã là AUTHOR? (Nếu đã là AUTHOR -> Báo lỗi 400, không tiêu thụ lượt mã).
+        * Người dùng đã từng đổi chính mã này chưa? (Kiểm tra `dbo.InvitationUses` -> Báo lỗi nếu trùng).
+      - Thực thi cập nhật:
+        * Tăng `UsedCount = UsedCount + 1`.
+        * Nếu `UsedCount = MaxUses` -> Cập nhật `Status = 'EXHAUSTED'`.
+        * Chèn bản ghi nhật ký kiểm toán vào `dbo.InvitationUses` (UserId, UsedAt, IpAddress, UserAgent).
+        * Chèn bản ghi vai trò AUTHOR vào `dbo.UserRoles` (RoleId = 2).
+      - Commit Transaction.
+   6. Frontend nhận phản hồi thành công, gọi `refreshUser()` lấy lại hồ sơ từ `/api/auth/me`.
+   7. `AuthContext` cập nhật `roles` sang `[READER, AUTHOR]`. Trang `/profile` tự động chuyển đổi sang giao diện tác giả, mở khóa tạo sách và quản lý tác phẩm.
+
+--------------------------------------------------------------------------------
+4. DANH SÁCH CÁC API HOÀN THÀNH
+--------------------------------------------------------------------------------
+A. Phân hệ Quản trị (Admin - yêu cầu xác thực + role ADMIN):
+   - GET   /api/admin/invitations
+     * Mục đích: Lấy danh sách mã mời tác giả (phân trang page/limit, thống kê tổng số, trạng thái).
+     * Bảo mật: Không trả về chuỗi mã thô và không trả về CodeHash.
+   - POST  /api/admin/invitations
+     * Mục đích: Tạo mã mời mới với thời hạn (1 - 365 ngày), số lượt (1 - 1000 lượt), ghi chú.
+     * Bảo mật: Trả về chuỗi mã thô duy nhất 1 lần trong phản hồi này.
+   - PATCH /api/admin/invitations/:id/revoke
+     * Mục đích: Thu hồi mã mời đang hiệu lực.
+
+B. Phân hệ Mã mời (User - yêu cầu xác thực):
+   - POST  /api/invitations/redeem
+     * Mục đích: Độc giả gửi mã mời để đổi lấy vai trò AUTHOR.
+     * Bảo mật: Chống race condition với UPDLOCK/ROWLOCK, kiểm tra trạng thái/thời hạn, ghi nhật ký sử dụng, bảo toàn vai trò ADMIN nếu có.
+
+C. Phân hệ Xác thực & Quyền hiện hành:
+   - GET   /api/auth/me
+     * Mục đích: Lấy thông tin tài khoản hiện tại kèm mảng quyền `roles` truy vấn trực tiếp từ `dbo.UserRoles`.
+
+--------------------------------------------------------------------------------
+5. DATABASE VÀ MIGRATION THỰC TẾ
+--------------------------------------------------------------------------------
+A. Script migration: `server/db/migrations/001_create_invitations.sql`
+   - Bảng `dbo.AuthorInvitations`:
+     * InvitationId UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID()
+     * CodeHash CHAR(64) NOT NULL UNIQUE
+     * CreatedByUserId UNIQUEIDENTIFIER NOT NULL (FK -> Users)
+     * ExpiresAt DATETIME2 NOT NULL
+     * MaxUses INT NOT NULL DEFAULT 1
+     * UsedCount INT NOT NULL DEFAULT 0
+     * Status NVARCHAR(20) NOT NULL DEFAULT 'ACTIVE'
+     * RevokedAt DATETIME2 NULL
+     * RevokedByUserId UNIQUEIDENTIFIER NULL (FK -> Users)
+     * Note NVARCHAR(255) NULL
+     * CreatedAt DATETIME2 NOT NULL DEFAULT GETDATE()
+   - Bảng `dbo.InvitationUses`:
+     * InvitationUseId UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID()
+     * InvitationId UNIQUEIDENTIFIER NOT NULL (FK -> AuthorInvitations)
+     * UserId UNIQUEIDENTIFIER NOT NULL (FK -> Users)
+     * UsedAt DATETIME2 NOT NULL DEFAULT GETDATE()
+     * IpAddress NVARCHAR(45) NULL
+     * UserAgent NVARCHAR(255) NULL
+   - Chỉ mục tối ưu:
+     * `UQ_AuthorInvitations_CodeHash` (Tìm kiếm O(1) theo mã băm)
+     * `IX_AuthorInvitations_Status_ExpiresAt` (Lọc nhanh theo trạng thái & hạn dùng)
+     * `IX_InvitationUses_InvitationId` & `IX_InvitationUses_UserId`
+
+B. Script thực thi: `server/db/runMigration.ts`
+   - Lệnh chạy: `npm run db:migrate`
+   - Kiểm tra an toàn `IF NOT EXISTS` trước khi tạo, bảo đảm Idempotent 100%. Không xóa hay thay đổi dữ liệu hiện có.
+
+--------------------------------------------------------------------------------
+6. DANH SÁCH FILE TẠO MỚI VÀ CHỈNH SỬA
+--------------------------------------------------------------------------------
+A. File tạo mới:
+1. `server/db/migrations/001_create_invitations.sql`
+2. `server/db/runMigration.ts`
+3. `server/scripts/bootstrapAdmin.ts`
+4. `server/repositories/invitationRepository.ts`
+5. `server/services/invitationService.ts`
+6. `server/controllers/adminController.ts`
+7. `server/controllers/invitationController.ts`
+8. `server/routes/adminRoutes.ts`
+9. `server/routes/invitationRoutes.ts`
+10. `src/pages/AdminDashboard.tsx`
+11. `src/pages/AdminDashboard.css`
+12. `tests/step02_1_invitations.test.ts`
+13. `STEP_02_1_REPORT.txt`
+
+B. File chỉnh sửa:
+1. `server/types/index.ts` (Thêm entity & DTO cho invitations)
+2. `server/app.ts` (Mount router `/api/admin` và `/api/invitations`)
+3. `src/services/api.ts` (Thêm adminApi và invitationsApi)
+4. `src/i18n/en.ts` & `src/i18n/vi.ts` (Thêm từ điển EN/VI cho Admin & Invitations)
+5. `src/components/layout/Navbar.tsx` & `Navbar.css` (Thêm badge ADMIN và liên kết /admin)
+6. `src/pages/Profile.tsx` (Thêm form nhập mã mời cho READER, hiển thị trạng thái AUTHOR/ADMIN)
+7. `src/App.tsx` (Thêm Route `/admin`)
+8. `package.json` (Thêm scripts `db:migrate` và `bootstrap:admin`)
+9. `PROJECT_NOTES.txt` (Cập nhật tài liệu kỹ thuật dự án)
+10. `AI_LOG.md` (Cập nhật nhật ký phát triển chi tiết)
+
+--------------------------------------------------------------------------------
+7. KẾT QUẢ TEST, LINT VÀ BUILD THỰC TẾ
+--------------------------------------------------------------------------------
+A. Kiểm thử tự động (Vitest):
+   Lệnh chạy: `npx vitest run` (hoặc `npm run test`)
+   Kết quả:
+   - `tests/api.test.ts`: 13/13 tests PASSED (Step 01 - Auth & Health)
+   - `tests/step02_books.test.ts`: 22/22 tests PASSED (Step 02 - Books & Files)
+   - `tests/step02_1_invitations.test.ts`: 19/19 tests PASSED (Step 02.1 - Admin & Invitations)
+   Tổng cộng: 54/54 tests PASSED (100% PASS). Thời gian chạy: ~3.66s.
+
+B. Kiểm tra cú pháp và quy tắc (Linter):
+   Lệnh chạy: `npm run lint` (Oxlint)
+   Kết quả: 0 errors (PASS).
+
+C. Kiểm tra biên dịch & đóng gói (Build):
+   Lệnh chạy: `npm run build` (tsc -b && vite build)
+   Kết quả: Đóng gói thành công `dist/index.html`, `dist/assets/index-*.css`, `dist/assets/index-*.js`. 0 errors (PASS).
+
+--------------------------------------------------------------------------------
+8. HƯỚNG DẪN CHẠY VÀ KIỂM THỬ THỦ CÔNG
+--------------------------------------------------------------------------------
+Bước 1: Khởi động hệ thống
+   Terminal 1: npm run server
+   Terminal 2: npm run dev
+   (Hoặc: npm run dev:all)
+
+Bước 2: Bootstrap tài khoản Admin
+   Chạy lệnh: npm run bootstrap:admin -- minhtri@bookchain.io
+   Đăng nhập tài khoản `minhtri@bookchain.io`.
+   Quan sát Navbar: Xuất hiện nút "Quản trị" (`/admin`) và huy hiệu [ADMIN].
+
+Bước 3: Tạo mã mời tác giả
+   1. Truy cập `/admin`.
+   2. Nhập số ngày hiệu lực (ví dụ 30 ngày), số lượt dùng (ví dụ 1 lượt), ghi chú "Cấp cho Tác giả khách mời".
+   3. Bấm "Tạo mã mời".
+   4. Modal hiện ra mã dạng `BKC-XXXX-YYYY-ZZZZ`. Bấm "Sao chép mã".
+
+Bước 4: Thử nghiệm đổi mã với tài khoản Reader
+   1. Đăng xuất Admin, đăng nhập tài khoản Độc giả (READER), ví dụ `ptien9237@gmail.com`.
+   2. Truy cập `/profile`. Nhìn thấy phần "Trở thành tác giả: Nhập mã mời tác giả".
+   3. Nhập mã vừa sao chép ở Bước 3.
+   4. Bấm "Kích hoạt quyền Tác giả".
+   5. Thông báo kích hoạt thành công xuất hiện. Giao diện trang Profile tự động chuyển sang khu vực tác giả, mở khóa quản lý tác phẩm và tải lên bản thảo.
+   6. Thử nhập lại mã đó lần thứ hai -> Hệ thống báo lỗi mã đã hết lượt sử dụng.
+
+--------------------------------------------------------------------------------
+9. CÁC VẤN ĐỀ CÒN TỒN TẠI
+--------------------------------------------------------------------------------
+- Không có lỗi nào bị chặn hoặc chưa giải quyết trong phạm vi Bước 02.1.
+- Mọi ràng buộc bảo mật, RBAC, kiểm toán và concurrency control đều hoạt động chính xác.
+
+--------------------------------------------------------------------------------
+10. NHỮNG CHỨC NĂNG NẰM NGOÀI PHẠM VI (SCOPE EXCLUSIONS)
+--------------------------------------------------------------------------------
+Các chức năng sau không thuộc phạm vi Bước 02.1 và sẽ được thực hiện ở các bước tiếp theo:
+- Smart Contract, Blockchain Ethereum Sepolia, Ethers.js giao dịch trên chuỗi.
+- NFT bản quyền sách và phân phối token.
+- Lưu trữ phân tán IPFS (Pinata / Kubo Node).
+- Xử lý tranh chấp bản quyền và báo cáo vi phạm sở hữu trí tuệ nâng cao (Bước 05).
+- Tích hợp cổng thanh toán bản quyền và chia sẻ doanh thu tự động (Royalty Splitting).
+================================================================================

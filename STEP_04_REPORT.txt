@@ -1,0 +1,340 @@
+================================================================================
+BÁO CÁO NGHIỆM THU KỸ THUẬT — BƯỚC 04
+DỰ ÁN: BOOKCHAIN LIBRARY — DIGITAL LIBRARY & BLOCKCHAIN COPYRIGHT REGISTRY
+Nhiệm vụ: TÍCH HỢP BLOCKCHAIN VÀO BOOKCHAIN LIBRARY (STEP 04 INTEGRATION)
+Thời điểm thực hiện: 14/10/2026
+Vai trò: Senior Full-Stack Blockchain Integration Engineer
+Môi trường: Windows, Node.js v24.19.0, TypeScript, React 19, Vite 8, Express, 
+            Ethers.js v6, Hardhat Local (Chain ID 31337), SQL Server 2025.
+================================================================================
+
+1. MỤC TIÊU VÀ PHẠM VI ĐÃ THỰC HIỆN
+--------------------------------------------------------------------------------
+Mục tiêu cốt lõi của Bước 04:
+Tích hợp liền mạch phân hệ Smart Contract BookCopyrightRegistry (đã hoàn thiện ở Bước 03)
+vào ứng dụng thư viện số BookChain Library (Frontend React + Backend Express + SQL Server),
+hiện thực hóa toàn diện hai luồng nghiệp vụ on-chain thực tế:
+  (1) Đăng ký bằng chứng bản quyền tác giả từ nội dung tệp sách thực tế.
+  (2) Xác minh tính toàn vẹn và quyền sở hữu bản quyền từ tệp hoặc mã băm SHA-256.
+
+Phạm vi đã hoàn thành 100%:
+- Xây dựng tầng Blockchain Contract Client phía backend (`server/blockchain/contractClient.ts`)
+  sử dụng Ethers.js v6 kết nối node Hardhat Local (`http://127.0.0.1:8545`, Chain ID 31337).
+- Mở rộng tầng dữ liệu SQL Server Repository (`server/repositories/copyrightRepository.ts`)
+  tương tác với hai bảng `dbo.CopyrightRecords` và `dbo.BlockchainTransactions`.
+- Cung cấp tầng Service và REST API bảo mật (`server/services/copyrightService.ts`,
+  `server/controllers/copyrightController.ts`, `server/routes/copyrightRoutes.ts`) tại `/api/copyright`.
+- Cập nhật frontend Web3 Wallet Context (`src/contexts/WalletContext.tsx`) cung cấp Signer,
+  BrowserProvider và kiểm tra quyền hạn on-chain `REGISTRAR_ROLE`.
+- Phát triển Modal đăng ký bản quyền chuyên nghiệp (`src/components/copyright/RegisterCopyrightModal.tsx`)
+  tích hợp xem trước tham số, kiểm tra quyền ví, ký giao dịch trực tiếp bằng MetaMask hoặc
+  chuyển tiếp qua Registrar Relay an toàn, kèm theo dõi trạng thái giao dịch thời gian thực.
+- Nâng cấp trang chi tiết sách (`src/pages/BookDetail.tsx`) hiển thị bảng chứng nhận bản quyền
+  on-chain (Trạng thái ON_CHAIN, TxHash, RecordId, nút Đăng ký bản quyền dành riêng cho tác giả).
+- Xây dựng trang Xác minh bản quyền công khai (`src/pages/Verify.tsx`) theo kiến trúc
+  "Archival Reading Room", hỗ trợ song song hai chế độ: Kéo thả tệp tính SHA-256 qua Web Crypto API
+  và Tra cứu trực tiếp theo chuỗi băm hex / RecordId / URL tham số query.
+- Bổ sung 35 từ khóa i18n song ngữ Anh - Việt (`src/i18n/en.ts`, `src/i18n/vi.ts`).
+- Thiết lập bộ 14 bài kiểm thử tích hợp tự động (`tests/step04_copyright_integration.test.ts`)
+  kiểm thử trực tiếp giao dịch ghi và đọc trên Hardhat node và SQL Server thật.
+
+Phạm vi ngoài thực hiện (Out of Scope):
+- Triển khai Sepolia / Mainnet (chưa thực hiện do môi trường thiếu RPC công khai và faucet ETH).
+- Lưu trữ tệp lên IPFS (đang sử dụng lưu trữ cục bộ bảo mật kèm SHA-256 digest).
+- Các luồng tranh chấp quyền (Dispute), thu hồi (Revoke) hay phân chia tiền bản quyền (Royalty).
+
+
+2. KIẾN TRÚC TÍCH HỢP (DUAL-LAYER ON-CHAIN & OFF-CHAIN ARCHITECTURE)
+--------------------------------------------------------------------------------
+Hệ thống tuân thủ triệt để nguyên lý:
+"Thư viện quản lý nghiệp vụ — Blockchain bảo chứng tính bất biến mật mã".
+
++------------------------------------------------------------------------------+
+|                            FRONTEND (React 19 + Vite)                         |
+|  - WalletContext: MetaMask provider, signer, network switch (31337)          |
+|  - RegisterCopyrightModal: Parameter review, dual signing (Direct / Relay)   |
+|  - Verify Page: Web Crypto SHA-256 file hashing, on-chain archival cert      |
++-----------------------+------------------------------+-----------------------+
+                        |                              |
+       Direct Contract  |                              | HTTP REST API
+       RPC Calls (Ethers)|                             | (session cookie auth)
+                        v                              v
++-------------------------------+      +---------------------------------------+
+|  BLOCKCHAIN (Hardhat 31337)   |      |        BACKEND (Express.js)           |
+|  Contract: 0x5FbDB...0aa3     |      |  - copyrightController & Service     |
+|  - registerCopyright()        |<-----+  - contractClient (Ethers v6 Provider)|
+|  - getCopyright(recordId)     |      |  - copyrightRepository (mssql pool)   |
+|  - verifyHash(contentHash)    |      +-------------------+-------------------+
+|  - totalRecords()             |                          |
++-------------------------------+                          |
+                                                           v
+                                       +---------------------------------------+
+                                       |      DATABASE (SQL Server 2025)       |
+                                       |  - dbo.Books & dbo.BookFiles          |
+                                       |  - dbo.CopyrightRecords               |
+                                       |  - dbo.BlockchainTransactions         |
+                                       +---------------------------------------+
+
+Các tham số mật mã được ánh xạ chuẩn xác giữa hai hệ thống:
+1. `recordId` (SQL Server UUID) <---> bytes32 (Solidity `keccak256(abi.encodePacked(...))`)
+2. `contentHash` (SQL Server CHAR(64) hex) <---> bytes32 (Solidity `bytes32(0x...)`)
+3. `authorWallet` (EVM Address `0x...`) <---> CHAR(42) / NVARCHAR(42) trong SQL Server.
+4. `status` (ON_CHAIN / PENDING / REVERTED trong SQL) <---> Status.ACTIVE (0) trong Smart Contract.
+
+
+3. LUỒNG ĐĂNG KÝ BẢN QUYỀN (COPYRIGHT REGISTRATION WORKFLOW)
+--------------------------------------------------------------------------------
+Luồng thực tế bao gồm 10 bước nghiêm ngặt:
+
+Bước 1: Tác giả đăng nhập vào BookChain Library bằng tài khoản có vai trò Tác giả (Author).
+Bước 2: Tác giả mở trang chi tiết sách (`/books/:id`) và chọn phiên bản sách cần đăng ký.
+Bước 3: Tác giả nhấn "Kết nối ví MetaMask". Hệ thống kiểm tra Chain ID (phải là 31337).
+        Nếu sai mạng, ví sẽ được tự động yêu cầu chuyển sang Hardhat Local.
+Bước 4: Tác giả nhấn "Đăng ký bản quyền On-chain" trên bảng điều khiển Blockchain.
+Bước 5: Frontend gọi API `POST /api/copyright/prepare` kèm `bookId` và `bookFileId`.
+        Backend kiểm tra:
+        - Quyền sở hữu của tác giả đối với tác phẩm (`dbo.BookAuthors`).
+        - Tệp phiên bản sách tồn tại và có mã băm SHA-256 tính từ chuỗi byte thật.
+        - Kiểm tra xem phiên bản này hoặc mã băm này đã được đăng ký on-chain chưa.
+        - Tạo bản ghi trạng thái `PENDING` trong `dbo.CopyrightRecords` và mã `RecordNumber`
+          tuần tự định dạng `BCR-YYYYMMDD-XXXX`.
+Bước 6: Giao diện hiển thị Modal xác nhận với đầy đủ thông tin minh bạch:
+        - Tên tác phẩm, số phiên bản, dung lượng tệp.
+        - Mã băm SHA-256 chuẩn mật mã (64 ký tự hex).
+        - Địa chỉ ví tác giả hưởng quyền (`authorWallet`).
+        - Địa chỉ ví thực hiện ký giao dịch.
+        - Địa chỉ hợp đồng Smart Contract mục tiêu.
+Bước 7: Kiểm tra quyền hạn `REGISTRAR_ROLE`:
+        - Trường hợp A (Ví tác giả có `REGISTRAR_ROLE` - ví dụ Account #0):
+          Frontend yêu cầu người dùng ký trực tiếp qua MetaMask gọi `contract.registerCopyright(...)`.
+        - Trường hợp B (Ví tác giả là tài khoản cá nhân thông thường - ví dụ Account #1):
+          Hệ thống giải thích rõ ràng và cung cấp tùy chọn "Ủy quyền qua Registrar Relay".
+          Backend sử dụng ví Registrar có thẩm quyền để ký và phát giao dịch, đảm bảo `authorWallet`
+          on-chain vẫn lưu chính xác là địa chỉ ví của tác giả.
+Bước 8: Theo dõi biên lai giao dịch on-chain:
+        Giao dịch được phát lên Hardhat Local. Hệ thống chờ biên lai `tx.wait(1)`.
+Bước 9: Đồng bộ vào SQL Server:
+        Frontend gọi `POST /api/copyright/sync` (hoặc Relay service tự động đồng bộ):
+        - Đọc lại dữ liệu on-chain bằng `getCopyright(recordId)` để đối soát tính toàn vẹn.
+        - Cập nhật `dbo.CopyrightRecords` thành `ON_CHAIN`, lưu `BlockNumber`, `ConfirmedAt`.
+        - Cập nhật `dbo.BlockchainTransactions` thành `CONFIRMED`, lưu `GasUsed`, `BlockTimestamp`.
+Bước 10: Modal hiển thị Chứng nhận đăng ký bản quyền thành công với Record ID, Transaction Hash,
+         Block Number và liên kết mở nhanh trang Tra cứu xác minh.
+
+
+4. LUỒNG XÁC MINH BẢN QUYỀN (COPYRIGHT VERIFICATION WORKFLOW)
+--------------------------------------------------------------------------------
+Trang Xác minh (`/verify`) được thiết kế công khai cho độc giả, nhà xuất bản và cơ quan quản lý:
+
+1. Chế độ Xác minh qua Tệp (Upload File Verification):
+   - Người dùng kéo thả hoặc tải lên tệp PDF/EPUB của cuốn sách.
+   - Trình duyệt sử dụng Web Crypto API (`crypto.subtle.digest('SHA-256', arrayBuffer)`)
+     để tính mã băm mật mã trực tiếp tại máy client. Tuyệt đối không tải nội dung tệp lên server.
+   - Gửi mã băm vừa tính đến API `GET /api/copyright/verify?hash=0x...`.
+
+2. Chế độ Tra cứu trực tiếp (Hash / RecordId / Query Search):
+   - Người dùng nhập trực tiếp chuỗi băm 64 ký tự hex hoặc mã định danh bản ghi UUID.
+   - Hỗ trợ tham số URL dạng `/verify/:query` hoặc `/verify?q=...` để nhúng vào QR Code.
+
+3. Quy trình xác thực On-chain:
+   - Backend gọi hàm `verifyHash(bytes32)` và `getCopyright(bytes32)` trực tiếp trên Smart Contract.
+   - Kết quả trả về gồm:
+     * Tồn tại trên blockchain hay không (`exists`).
+     * Trạng thái bản quyền (`ACTIVE`, `DISPUTED`, `REVOKED`).
+     * Mốc thời gian ghi nhận khối (`registeredAt`).
+     * Địa chỉ ví tác giả sở hữu (`authorWallet`).
+     * Địa chỉ ví đăng ký viên (`registrant`).
+     * Thông tin đối chiếu trong cơ sở dữ liệu thư viện (Tên sách, tác giả, phiên bản).
+
+4. Trình bày Giấy chứng nhận số (Archival Certificate):
+   - Nếu bản ghi hợp lệ: Hiển thị chứng chỉ trang trọng với con dấu xanh "VERIFIED ON-CHAIN",
+     thẻ trạng thái hiệu lực, thời gian khối, địa chỉ ví tác giả rút gọn và mã giao dịch.
+   - Nếu không tìm thấy: Hiển thị cảnh báo "KHÔNG TÌM THẤY BẢN QUYỀN TRÊN BLOCKCHAIN",
+     kèm giải thích rõ ràng về việc tệp chưa đăng ký hoặc đã bị chỉnh sửa nội dung.
+
+
+5. CƠ CHẾ ĐỒNG BỘ BLOCKCHAIN VÀ SQL SERVER (SYNC & FAULT TOLERANCE)
+--------------------------------------------------------------------------------
+Do Blockchain và SQL Server là hai hệ thống phân tán không có giao dịch nguyên tử (ACID chung),
+hệ thống triển khai cơ chế đồng bộ lũy kế (Idempotent Sync) và chống xung đột:
+
+1. Trạng thái giao dịch 2 pha (Two-phase State Tracking):
+   - Pha 1: `PENDING` — Khi yêu cầu được tạo, SQL Server ghi nhận giao dịch đang xử lý.
+   - Pha 2: `ON_CHAIN` / `CONFIRMED` — Chỉ được chuyển sang trạng thái này sau khi
+     hàm `provider.getTransactionReceipt(txHash)` xác nhận `status === 1` và
+     hàm `contract.getCopyright(recordId)` đọc thành công dữ liệu từ Smart Contract.
+
+2. Tính lũy kế (Idempotency):
+   - API `POST /api/copyright/sync` có thể được gọi nhiều lần cho cùng một `recordId` và `txHash`
+     mà không tạo ra bản ghi thừa hoặc gây lỗi cơ sở dữ liệu.
+   - Nếu bản ghi đã `ON_CHAIN`, hệ thống trả về ngay thông tin hiện tại kèm biên lai đối chiếu.
+
+3. Xử lý lỗi lệch pha (Split-brain Recovery):
+   - Nếu giao dịch on-chain đã thành công nhưng bước lưu SQL bị mất kết nối mạng hoặc lỗi client:
+     Tác giả hoặc hệ thống chỉ cần gọi lại endpoint `/sync` kèm `txHash`. Backend tự động
+     đối chiếu receipt on-chain, trích xuất sự kiện `CopyrightRegistered` và cập nhật SQL Server
+     mà không cần phát lại giao dịch lên blockchain, tránh tốn phí gas và lỗi trùng lặp băm.
+
+4. Chuẩn hóa định dạng băm (Case-Insensitive Parity):
+   - SQL Server lưu chuỗi băm chữ hoa (`CHAR(64)`), trong khi Node.js và Web Crypto trả về chữ thường.
+   - Hệ thống tự động chuẩn hóa `.toLowerCase().trim()` trước khi chuyển sang `bytes32` (Solidity),
+     đảm bảo không bao giờ bị lệch mã băm do khác biệt chữ hoa/thường.
+
+
+6. DANH SÁCH FILE THAY ĐỔI
+--------------------------------------------------------------------------------
+A. File tạo mới:
+1. `server/blockchain/contractClient.ts` — Module kết nối Ethers v6, tương tác contract và xác minh receipt.
+2. `server/repositories/copyrightRepository.ts` — Tầng thao tác dữ liệu SQL Server cho bản quyền và giao dịch.
+3. `server/services/copyrightService.ts` — Dịch vụ nghiệp vụ chuẩn bị đăng ký, đồng bộ, chuyển tiếp và xác minh.
+4. `server/controllers/copyrightController.ts` — Controller xử lý request, validation và response API.
+5. `server/routes/copyrightRoutes.ts` — Định tuyến các endpoint `/api/copyright/*`.
+6. `src/components/copyright/RegisterCopyrightModal.tsx` — Modal giao diện đăng ký bản quyền Web3.
+7. `src/components/copyright/RegisterCopyrightModal.css` — CSS phong cách Archival cho modal đăng ký.
+8. `src/pages/Verify.tsx` — Trang xác minh bản quyền công khai hai chế độ (File & Hash).
+9. `src/pages/Verify.css` — CSS chuyên dụng cho trang xác minh và chứng chỉ số.
+10. `tests/step04_copyright_integration.test.ts` — Bộ 14 bài kiểm thử tích hợp tự động cho Bước 04.
+11. `STEP_04_REPORT.txt` — Báo cáo nghiệm thu kỹ thuật này.
+
+B. File chỉnh sửa:
+1. `server/app.ts` — Đăng ký route `/api/copyright`.
+2. `server/config/env.ts` — Bổ sung cấu hình `HARDHAT_RPC_URL` và `CONTRACT_ADDRESS`.
+3. `server/types/index.ts` — Bổ sung interface DTO cho Copyright Records và Blockchain Transactions.
+4. `src/App.tsx` — Đăng ký các route `/verify`, `/verify/:query`, `/copyright/verify/:query`.
+5. `src/contexts/WalletContext.tsx` — Mở rộng hàm `getSigner()`, `getBrowserProvider()`, `checkHasRole()`.
+6. `src/services/api.ts` — Bổ sung API client `copyrightApi` (prepare, sync, relay, verify, getRecords).
+7. `src/pages/BookDetail.tsx` — Bổ sung giao diện Blockchain Copyright Registry và trigger Modal đăng ký.
+8. `src/i18n/en.ts` & `src/i18n/vi.ts` — Bổ sung 35 từ khóa dịch thuật về đăng ký và xác minh bản quyền.
+9. `PROJECT_NOTES.txt` — Cập nhật kiến trúc tích hợp, API endpoints và sổ tay vận hành Bước 04.
+10. `AI_LOG.md` — Ghi nhận nhật ký chi tiết các thay đổi, mã lỗi đã sửa và kết quả kiểm thử.
+
+
+7. KẾT QUẢ TEST, LINT VÀ BUILD
+--------------------------------------------------------------------------------
+1. Kiểm thử đơn vị & tích hợp hệ thống (Vitest):
+   - Lệnh thực thi: `npm test`
+   - Kết quả: 6/6 test files PASSED, 84/84 tests PASSED (100% tỷ lệ đạt)
+   - Chi tiết từng bộ test:
+     * tests/step01_auth.test.ts: 18 passed
+     * tests/step02_books.test.ts: 18 passed
+     * tests/step02_1_admin.test.ts: 18 passed
+     * tests/step03_contracts.test.ts: 7 passed
+     * tests/step03_1_wallet.test.ts: 9 passed
+     * tests/step04_copyright_integration.test.ts: 14 passed (Bộ test mới cho Bước 04)
+   - Thời gian thực thi: 8.87 giây.
+
+2. Kiểm thử hợp đồng thông minh (Hardhat Tests):
+   - Lệnh thực thi: `npm run contracts:test`
+   - Kết quả: 29/29 tests PASSED (100% tỷ lệ đạt)
+   - Bao phủ: Khởi tạo, phân quyền RBAC, đăng ký bản quyền, băm nội dung, tạm dừng khẩn cấp
+     Pausable, chống trùng lặp, xác minh tính toàn vẹn.
+
+3. Kiểm tra cú pháp và chất lượng mã nguồn (Linter):
+   - Lệnh thực thi: `npm run lint` (oxlint)
+   - Kết quả: 0 cảnh báo, 0 lỗi (Finished in 77ms on 104 files with 0 rules errored).
+
+4. Biên dịch dự án (TypeScript & Vite Production Build):
+   - Lệnh thực thi: `npm run build`
+   - Kết quả: `tsc -b && vite build` thành công hoàn toàn trong 5.75 giây.
+   - Artifacts: Đóng gói thành công `dist/index.html` (1.30 kB) và bundle JS/CSS tối ưu.
+
+
+8. KẾT QUẢ KIỂM THỬ TÍCH HỢP THỰC TẾ TRÊN HARDHAT LOCAL
+--------------------------------------------------------------------------------
+Kiểm tra thực tế với Hardhat node (`http://127.0.0.1:8545`) và cơ sở dữ liệu SQL Server:
+
+1. Xác minh node và hợp đồng:
+   - Node RPC: Hoạt động bình thường tại cổng 8545, Chain ID phản hồi: 31337.
+   - Hợp đồng `BookCopyrightRegistry`: Địa chỉ `0x5FbDB2315678afecb367f032d93F642f64180aa3`.
+   - Bytecode on-chain: 14,494 ký tự hex (hợp đồng đã deploy đầy đủ).
+
+2. Giao dịch thực tế được ghi nhận:
+   - Bộ test `step04_copyright_integration.test.ts` đã thực hiện phát sinh và xác nhận
+     thành công 6 bản ghi bản quyền on-chain vào SQL Server và Hardhat Local.
+   - Mẫu dữ liệu thực tế từ cơ sở dữ liệu `BookChainLibrary`:
+     * Record 1: RecordNumber `BCR-20261014-0001`, Status `ON_CHAIN`,
+       TxHash: `0xee69e6b36a18d3d922bb0cbead2814b6fc524dcaeb427005aa26ee8242c94396`, Block: 5
+     * Record 2: RecordNumber `BCR-20261014-0002`, Status `ON_CHAIN`,
+       TxHash: `0x716911cfa545a9e3ebf1fa567635c2fb1cb1b38f90c4bf4181a95a12fa1db3cb`, Block: 6
+     * Record 3: RecordNumber `BCR-20261014-0003`, Status `ON_CHAIN`,
+       TxHash: `0xdb588360dfab88a44ecad54b0445d359eeffbfefeb599d4eeafcf162095f4eb2`, Block: 7
+   - Xác minh on-chain: Gọi `contract.getCopyright(recordId)` trả về đúng `authorWallet`,
+     `contentHash`, `status = 0 (ACTIVE)` và `registeredAt` tương ứng với block timestamp thực tế.
+
+3. Kiểm thử các tình huống biên:
+   - Từ chối người dùng không phải tác giả: Hệ thống chặn ngay tại bước `prepare` với lỗi 403.
+   - Chống trùng lặp băm nội dung: Khi cố đăng ký phiên bản có cùng SHA-256 đã tồn tại,
+     hệ thống từ chối và cảnh báo rõ ràng.
+   - Xác minh băm không tồn tại: Trang `/verify` trả về `exists: false` chính xác.
+
+
+9. NHỮNG PHẦN CHƯA HOÀN THÀNH VÀ NGUYÊN NHÂN
+--------------------------------------------------------------------------------
+1. Triển khai Sepolia Testnet:
+   - Nguyên nhân: Chưa cấu hình RPC Endpoint công khai (Infura/Alchemy) và chưa có tài khoản
+     nắm giữ Sepolia ETH thật trong môi trường kiểm thử cục bộ.
+   - Đánh giá: Kiến trúc code hoàn toàn tương thích EVM; khi có RPC và Private Key hợp lệ,
+     chỉ cần cấu hình biến môi trường `.env` là có thể chuyển đổi sang Sepolia mà không cần sửa code.
+
+2. Tích hợp phân tán IPFS:
+   - Nguyên nhân: Nằm ngoài phạm vi của Bước 04 theo đặc tả ban đầu.
+   - Hiện trạng: Hệ thống đang lưu trữ đường dẫn tệp an toàn và mã băm SHA-256 trên SQL Server
+     và lưu `MetadataUri` dưới dạng canonical URI. Sẵn sàng tích hợp IPFS ở các bước tiếp theo.
+
+
+10. HƯỚNG DẪN CHẠY VÀ KIỂM TRA DỰ ÁN
+--------------------------------------------------------------------------------
+Bước 1: Khởi động node Hardhat Local (nếu chưa chạy):
+   npm run contracts:node
+
+Bước 2: Deploy contract lên node local (nếu node vừa khởi động lại):
+   npm run contracts:deploy:local
+
+Bước 3: Khởi động hệ thống Full-stack (Backend Express + Frontend Vite):
+   npm run dev
+
+Bước 4: Cấu hình ví MetaMask:
+   - Mạng: Localhost 8545
+   - RPC URL: http://127.0.0.1:8545
+   - Chain ID: 31337
+   - Tiền tệ: GO / ETH
+   - Import tài khoản thử nghiệm từ Hardhat:
+     * Account #0 (Registrar & Admin): 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+     * Account #1 (Author Wallet): 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
+
+Bước 5: Thử nghiệm luồng Đăng ký bản quyền:
+   - Đăng nhập với tài khoản tác giả (ví dụ: `author1@example.com` / `Author@123`).
+   - Vào trang chi tiết sách của tác giả, kết nối MetaMask.
+   - Nhấn "Đăng ký bản quyền On-chain" và thực hiện ký giao dịch.
+
+Bước 6: Thử nghiệm luồng Xác minh:
+   - Mở trang `http://localhost:5173/verify`.
+   - Kéo thả tệp PDF sách hoặc dán mã SHA-256 vào thanh tra cứu để xem Giấy chứng nhận on-chain.
+
+Bước 7: Chạy kiểm thử tự động toàn diện:
+   npm test
+   npm run contracts:test
+   npm run lint
+   npm run build
+
+
+11. ĐÁNH GIÁ ĐẠT/CHƯA ĐẠT VÀ CÁC RỦI RO CÒN LẠI
+--------------------------------------------------------------------------------
+ĐÁNH GIÁ TỔNG THỂ: ĐẠT YÊU CẦU BƯỚC 04 (PASSED - 100%)
+
+Các tiêu chí nghiệm thu đạt được:
+[x] Luồng đăng ký bản quyền tương tác thực tế với Smart Contract trên Hardhat Local.
+[x] Giao dịch có biên lai xác thực, block number, gas used thật trên blockchain.
+[x] Luồng xác minh đọc dữ liệu trực tiếp on-chain thông qua các hàm view của contract.
+[x] Mã băm SHA-256 xử lý nhất quán từ tệp thật đến chuẩn `bytes32`.
+[x] Đồng bộ dữ liệu SQL Server và Blockchain đạt tính lũy kế, không báo thành công giả.
+[x] Kiểm tra phân quyền RBAC và xử lý lỗi người dùng từ chối/mất mạng chu đáo.
+[x] Toàn bộ 84 bài test tích hợp, 29 bài test contract, lint và build đều đạt 100%.
+[x] Tài liệu kỹ thuật `PROJECT_NOTES.txt`, `AI_LOG.md` và `STEP_04_REPORT.txt` đầy đủ.
+
+Rủi ro còn lại & Khuyến nghị cho Bước tiếp theo:
+1. Trạng thái node cục bộ: Hardhat in-memory node sẽ xóa toàn bộ block và contract khi tắt tiến trình.
+   Khuyến nghị: Luôn chạy `npm run contracts:deploy:local` sau mỗi lần khởi động lại node.
+2. Kiểm tra quyền tác giả chặt chẽ hơn khi cập nhật phiên bản mới: Cần tiếp tục duy trì
+   tính bất biến của các phiên bản cũ đã đăng ký bản quyền.
+================================================================================

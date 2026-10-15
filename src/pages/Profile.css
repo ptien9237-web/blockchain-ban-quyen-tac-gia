@@ -1,0 +1,147 @@
+.profile-avatar-circle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background-color: var(--color-ground);
+  color: var(--color-interactive);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+  user-select: none;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.status-badge {
+  background-color: var(--color-ground);
+  border: 1px solid var(--color-border);
+  color: var(--color-success);
+}
+
+.role-tag {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-ground);
+}
+
+.role-tag.reader {
+  color: var(--color-ink);
+}
+
+.role-tag.author {
+  color: var(--color-accent);
+  border-color: rgba(211, 47, 47, 0.3);
+  background-color: rgba(211, 47, 47, 0.05);
+}
+
+.role-tag.admin {
+  color: #8E44AD;
+  border-color: rgba(142, 68, 173, 0.3);
+  background-color: rgba(142, 68, 173, 0.05);
+}
+
+.bg-warning {
+  background-color: var(--color-warning-bg);
+}
+
+.text-warning {
+  color: var(--color-warning);
+}
+
+.bg-success {
+  background-color: var(--color-success-bg);
+}
+
+.text-success {
+  color: var(--color-success);
+}
+
+/* Author Works Management */
+.author-works-card {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-sm);
+}
+
+.works-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.work-item {
+  border: 1px solid var(--color-border);
+  background-color: var(--color-ground);
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+  transition: border-color 0.2s ease;
+}
+
+.work-item:hover {
+  border-color: var(--color-ink-muted);
+}
+
+.work-status-pill {
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.work-status-draft {
+  background-color: rgba(150, 150, 150, 0.15);
+  color: var(--color-ink-muted);
+  border: 1px solid var(--color-border);
+}
+
+.work-status-published {
+  background-color: var(--color-success-bg, rgba(46, 125, 50, 0.1));
+  color: var(--color-success, #2e7d32);
+  border: 1px solid rgba(46, 125, 50, 0.2);
+}
+
+.work-status-unlisted {
+  background-color: var(--color-warning-bg, rgba(237, 108, 2, 0.1));
+  color: var(--color-warning, #ed6c02);
+  border: 1px solid rgba(237, 108, 2, 0.2);
+}
+
+/* Modal overlays */
+.profile-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 15, 15, 0.75);
+  backdrop-filter: blur(3px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.profile-modal-container {
+  width: 100%;
+  max-width: 580px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.profile-modal-header {
+  padding: 16px 20px;
+  background-color: var(--color-ground);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.profile-modal-body {
+  padding: 24px;
+}

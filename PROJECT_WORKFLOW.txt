@@ -1,0 +1,39 @@
+# PROJECT WORKFLOW
+
+## Task History
+1. Analyzed brief and identified product goals (Library First, Copyright Second, Blockchain Underneath).
+2. Initialized project using Vite + React + TypeScript.
+3. Created `PRODUCT.md` and `DESIGN.md` as part of the Impeccable initialization and new-work flow.
+4. Adopted the "Archival Reading Room" visual direction for a premium, trustworthy look.
+5. Implemented foundational design tokens and CSS resets in `src/index.css`.
+6. Built layout components (`Navbar.tsx`, `Footer.tsx`, `Layout.tsx`).
+7. Built core pages:
+   - `Home.tsx` (Hero, philosophy, featured book)
+   - `Discover.tsx` (Library browsing, search, filter)
+   - `BookDetail.tsx` (Book metadata, archival copyright record)
+   - `Verify.tsx` (File upload and cryptographic hash verification simulation)
+   - `Register.tsx` (Multi-step registration process simulation)
+8. Updated `App.tsx` router configuration to tie pages together.
+9. Created mock data layer (`src/services/mockData.ts`).
+10. Added Bilingual Language System (EN/VI) with local storage persistence via `I18nContext`.
+11. Added Light/Dark Theme System with local storage persistence via `ThemeContext`.
+12. Translated all hardcoded UI strings on all components into English and Vietnamese dictionary maps in `src/i18n/`.
+13. Overhauled UI for Dark Theme to preserve "archival reading room" aesthetic at night using carefully selected CSS variable overrides on `.dark`.
+14. Ran Impeccable detector to clear out styling artifacts, then successfully completed `npm run lint` and `npm run build`.
+
+## Decisions
+- Used Vanilla CSS with CSS variables over TailwindCSS (per user instruction to avoid Tailwind).
+- Replaced Web3/Crypto aesthetic with an Editorial/Archival aesthetic to meet the "Library First" mandate.
+- Implemented mock functionality for file hashing and blockchain interactions to satisfy MVP requirements.
+- Implemented I18n and Theme as React Contexts mapped to LocalStorage and class mutations to avoid third party bloat and ensure fast execution. Data contents (book descriptions, names, hashes) remain strictly untranslated to preserve integrity.
+
+## Current Status
+- Frontend MVP implemented successfully.
+- Pages, routing, language switching, and theme switching are fully functioning.
+- Responsive design applied to all major components.
+
+## Next Phase
+- Smart Contract Implementation
+- IPFS Storage Integration
+- Real Ethers.js integration
+- Wallet connection via Web3Modal or similar

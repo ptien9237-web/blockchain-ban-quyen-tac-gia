@@ -1,0 +1,58 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules/
+
+# Production build outputs
+dist/
+dist-ssr/
+
+# Environment configurations & secrets
+*.local
+.env
+.env.*
+!.env.example
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS temporary files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Hardhat & Blockchain compilation cache & artifacts
+cache/
+artifacts/
+typechain/
+typechain-types/
+
+# Local File Storage (preserve directories via .gitkeep, exclude actual files)
+storage/books/*
+!storage/books/.gitkeep
+storage/ipfs/*
+!storage/ipfs/.gitkeep
+
+# Local database dumps with test/runtime user data
+bookchainlibrary.sql
+*.bak
+
+# AI agent & IDE scratch directories
+.gemini/
+scratch/
+impeccable/

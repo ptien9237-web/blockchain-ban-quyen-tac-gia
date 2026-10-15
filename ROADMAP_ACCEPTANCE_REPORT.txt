@@ -1,0 +1,177 @@
+================================================================================
+BÁO CÁO NGHIỆM THU TỔNG THỂ 5 GIAI ĐOẠN — BOOKCHAIN LIBRARY
+DIGITAL LIBRARY & BLOCKCHAIN COPYRIGHT REGISTRY ROADMAP AUDIT
+================================================================================
+
+Thời gian lập báo cáo: 2026-10-15
+Người thực hiện: Senior Full-Stack Engineer, Smart Contract Engineer & QA Engineer
+Môi trường thực tế: Windows, Node.js v24.19.0, React 19, TypeScript 6, Vite 8, Express 5, SQL Server 2025, Hardhat Node (Chain ID 31337)
+Triết lý thiết kế: "LIBRARY FIRST, COPYRIGHT SECOND, BLOCKCHAIN UNDERNEATH"
+
+================================================================================
+1. BẢNG TỔNG HỢP NGHIỆM THU 5 GIAI ĐOẠN (AUDIT MATRIX)
+================================================================================
+
+| Giai đoạn | Nội dung cốt lõi | Trạng thái | Bằng chứng & File đối chiếu |
+|---|---|---|---|
+| **Giai đoạn 1** | Nền tảng tài khoản, Xác thực & Phân quyền RBAC | **PASS** | `server/controllers/authController.ts`, `server/services/authService.ts`, `server/repositories/userRepository.ts`, `tests/api.test.ts` (13 tests pass), `tests/step02_1_invitations.test.ts` (19 tests pass) |
+| **Giai đoạn 2** | Thư viện số, Quản lý sách, Tác giả, Phiên bản & SHA-256 nhị phân | **PASS** | `server/services/bookService.ts`, `server/repositories/bookRepository.ts`, `server/repositories/bookFileRepository.ts`, `tests/step02_books.test.ts` (22 tests pass), `server/services/storage/localStorageProvider.ts` |
+| **Giai đoạn 3** | Smart Contract BookCopyrightRegistry.sol (RBAC, Hash, Lifecycle, Pause) | **PASS** | `contracts/BookCopyrightRegistry.sol`, `tests/step03_blockchain_utils.test.ts` (7 tests pass), `npm run contracts:test` (29/29 tests pass) |
+| **Giai đoạn 4** | Tích hợp Blockchain hoàn chỉnh (MetaMask, Relay, Sync, Multi-network, Idempotency) | **PASS (Local) / PREPARED (Sepolia)** | `src/contexts/WalletContext.tsx`, `server/blockchain/contractClient.ts`, `server/services/copyrightService.ts`, `tests/step04_copyright_integration.test.ts` (14 tests pass), `tests/step03_1_wallet.test.ts` (9 tests pass) |
+| **Giai đoạn 5** | Quản lý tranh chấp, Kiểm toán, Cầu dao khẩn cấp & Tích hợp IPFS Storage | **PASS (Local & IPFS Engine)** | `server/services/reportService.ts`, `server/services/storage/ipfsStorageProvider.ts`, `server/services/storage/storageManager.ts`, `tests/step05_dispute_management.test.ts` (18 tests pass), `tests/step06_storage_reconciliation.test.ts` (8 tests pass) |
+
+================================================================================
+2. CHI TIẾT NGHIỆM THU TỪNG GIAI ĐOẠN
+================================================================================
+
+--------------------------------------------------------------------------------
+GIAI ĐOẠN 1: NỀN TẢNG TÀI KHOẢN VÀ NGHIỆP VỤ (STATUS: PASS)
+--------------------------------------------------------------------------------
+- Đăng ký, đăng nhập, đăng xuất và quản lý phiên:
+  * Mật khẩu băm an toàn bằng bcryptjs (salt rounds = 10).
+  * Phiên làm việc quản lý qua JWT và lưu vết trong bảng `dbo.Sessions`, hỗ trợ thu hồi phiên (revocation).
+  * Cookie HttpOnly, cấu hình `sameSite: 'lax'/'strict'`.
+- Phân quyền RBAC (READER, AUTHOR, ADMIN):
+  * Mọi người dùng đăng ký mới mặc định nhận vai trò `READER`.
+  * Vai trò `AUTHOR` cấp thông qua mã mời tác giả mật mã (`dbo.AuthorInvitations`) do Admin tạo hoặc qua API cấp bút danh.
+  * Vai trò `ADMIN` được bảo vệ tuyệt đối: không thể tự phong quyền từ frontend; khởi tạo an toàn qua script `server/scripts/bootstrapAdmin.ts`.
+  * Kiểm tra quyền chặt chẽ ở cả Frontend và Backend (middleware `requireAuth`, `requireRole`).
+- Xác thực đầu vào và bảo mật:
+  * Kiểm tra định dạng email, độ dài mật khẩu (>= 8 ký tự), chống IDOR trên mọi tài nguyên sách/hồ sơ tác giả.
+  * Bằng chứng kiểm thử: `tests/api.test.ts` (13 bài kiểm thử), `tests/step02_1_invitations.test.ts` (19 bài kiểm thử).
+
+--------------------------------------------------------------------------------
+GIAI ĐOẠN 2: QUẢN LÝ THƯ VIỆN VÀ BẢN QUYỀN NGOÀI BLOCKCHAIN (STATUS: PASS)
+--------------------------------------------------------------------------------
+- Quản lý sách, tác giả và phiên bản:
+  * Hỗ trợ đồng tác giả (`PRIMARY_AUTHOR`, `CO_AUTHOR`).
+  * Quản lý phiên bản tệp tuần tự (`VersionNumber` 1, 2, 3...) độc lập, không ghi đè phiên bản cũ.
+  * Trạng thái xuất bản: `DRAFT`, `PUBLISHED`, `ARCHIVED`.
+- Tính SHA-256 từ nội dung byte thực tế:
+  * Mã băm SHA-256 được tính toán trực tiếp từ chuỗi byte nhị phân của tệp nhận được tại server qua `crypto.createHash('sha256')`.
+  * Tuyệt đối không tin cậy mã băm do client tự khai báo.
+  * Chức năng đối soát tính toàn vẹn vật lý (`verifyFileIntegrity`) đọc lại byte tệp từ đĩa/IPFS và so sánh với mã băm trong CSDL.
+- Phân tách quyền truy cập tệp (AccessLevel):
+  * `PRIVATE`: Chỉ tác giả cuốn sách và Admin có quyền đọc/tải.
+  * `PUBLIC_READ`: Bạn đọc được xem/đọc trực tuyến qua PDF Archival Reader nhưng chặn tải file gốc (HTTP 403).
+  * `PUBLIC_DOWNLOAD`: Mọi người dùng được đọc và tải file gốc.
+- An toàn lưu trữ và ngăn ngừa Path Traversal:
+  * Tên tệp lưu trữ chuẩn hóa: `YYYYMMDD_<uuid>.<ext>` (Local) và CID `ipfs://Qm...` (IPFS).
+  * Hàm `resolveSafePath` kiểm tra chặn tấn công thư mục cha (`..`).
+  * Giới hạn kích thước tệp upload 50MB (Multer).
+  * Bằng chứng kiểm thử: `tests/step02_books.test.ts` (22 bài kiểm thử).
+
+--------------------------------------------------------------------------------
+GIAI ĐOẠN 3: SMART CONTRACT BOOKCOPYRIGHTREGISTRY.SOL (STATUS: PASS)
+--------------------------------------------------------------------------------
+- Kiến trúc Smart Contract:
+  * Xây dựng trên nền tảng Solidity 0.8.28, kế thừa `AccessControl` và `Pausable` của OpenZeppelin v5.
+  * Phân quyền: `DEFAULT_ADMIN_ROLE` (quản trị, tranh chấp, pause/unpause) và `REGISTRAR_ROLE` (ghi nhận bản quyền).
+- Chức năng cốt lõi:
+  * `registerCopyright`: Ghi nhận bản quyền bất biến gồm RecordId, BookId, VersionNumber, ContentHash, AuthorWallet.
+  * `verifyHash`: Tra cứu an toàn theo mã băm SHA-256, không revert khi không tìm thấy, trả về đầy đủ metadata on-chain.
+  * `getCopyright` / `getCopyrightByHash`: Tra cứu chi tiết bản ghi.
+  * Vòng đời tranh chấp: `disputeCopyright` (chuyển sang `DISPUTED`), `resolveDispute` (khôi phục `ACTIVE` hoặc chuyển sang `REVOKED`), `revokeCopyright` (thu hồi trực tiếp).
+  * Cầu dao khẩn cấp: `pause()`, `unpause()`, bảo vệ bằng modifier `whenNotPaused` trên `registerCopyright`.
+- Chống trùng lặp tuyệt đối:
+  * Revert nếu trùng `RecordId` (`RecordAlreadyExists`).
+  * Revert nếu trùng `ContentHash` (`HashAlreadyExists`).
+  * Revert nếu trùng cặp `(BookId, VersionNumber)` (`VersionAlreadyExists`).
+- Bảo mật dữ liệu on-chain:
+  * Tuyệt đối không lưu nội dung sách hay dữ liệu nhạy cảm on-chain; chỉ lưu dấu vân tay mật mã 32 bytes (`bytes32`).
+  * Bằng chứng kiểm thử: `npm run contracts:test` (29/29 Unit Tests PASSED 100%).
+
+--------------------------------------------------------------------------------
+GIAI ĐOẠN 4: TÍCH HỢP BLOCKCHAIN HOÀN CHỈNH (STATUS: PASS LOCAL / PREPARED SEPOLIA)
+--------------------------------------------------------------------------------
+- Phân hệ kết nối ví Web3 (MetaMask):
+  * `WalletContext.tsx` và `WalletButton.tsx` tích hợp mượt mà theo thẩm mỹ Archival.
+  * Hỗ trợ đa mạng: Tự động nhận diện mạng Hardhat Local (Chain ID: 31337 / `0x7a69`) và Ethereum Sepolia (Chain ID: 11155111 / `0xaa36a7`).
+  * Phát hiện sai mạng và hỗ trợ chuyển mạng tự động (`switchNetwork`).
+- Phân biệt rõ ràng phương thức ký giao dịch:
+  * Nhánh A (Người dùng ký trực tiếp): Dành cho tài khoản có `REGISTRAR_ROLE`, ký qua MetaMask `BrowserProvider`. Ghi nhận `TransactionType = 'REGISTER_DIRECT_METAMASK'` trong `dbo.BlockchainTransactions`.
+  * Nhánh B (Relay Signer qua Backend): Dành cho tác giả thông thường ủy quyền cho Registrar Relay của hệ thống phát sóng. Ghi nhận `TransactionType = 'REGISTER_RELAY_SIGNER'` trong `dbo.BlockchainTransactions`. Địa chỉ ví tác giả vẫn được ghi chính xác vào trường `authorWallet` on-chain.
+- Xác nhận biên lai giao dịch & tính Idempotent:
+  * Endpoint `POST /api/copyright/sync` truy vấn biên lai on-chain thực tế qua JSON-RPC (`receipt.status === 1`), chỉ cập nhật `CONFIRMED` khi giao dịch đã đào vào khối thành công.
+  * Cơ chế chèn giao dịch an toàn (idempotent), ngăn ngừa lỗi vi phạm khóa duy nhất `UX_BlockchainTransactions_Chain_TxHash`.
+- Cơ chế đối soát & phục hồi giao dịch (Reconciliation Mechanism):
+  * Triển khai hàm `reconcilePendingTransactions()` trong `copyrightService.ts` và endpoint `POST /api/copyright/reconcile`.
+  * Quét toàn bộ giao dịch đang ở trạng thái `QUEUED` / `PENDING`, đối chiếu lại biên lai on-chain và hàm `verifyHash` của smart contract để tự động đồng bộ CSDL với thực tế on-chain.
+- Quản trị phân quyền Smart Contract (Script cấp quyền):
+  * Script `scripts/grantRole.cjs` cho phép cấp `REGISTRAR_ROLE` an toàn và có kiểm tra trạng thái trước (idempotent).
+  * Đã kiểm chứng thực tế: Cấp quyền thành công cho tài khoản `0x7099...79C8` tại Block 78 trên node Local.
+  * Bằng chứng kiểm thử: `tests/step04_copyright_integration.test.ts` (14 bài kiểm thử), `tests/step03_1_wallet.test.ts` (9 bài kiểm thử).
+
+--------------------------------------------------------------------------------
+GIAI ĐOẠN 5: LƯU TRỮ, BÁO CÁO VI PHẠM, QUẢN TRỊ VÀ NGHIỆM THU (STATUS: PASS)
+--------------------------------------------------------------------------------
+- Quản lý Khiếu nại & Tranh chấp Bản quyền:
+  * Bạn đọc gửi khiếu nại qua `ReportModal` với 6 nhóm lý do chuẩn mực (`PLAGIARISM`, `UNLICENSED_DISTRIBUTION`, `IMPERSONATION`, `FRAUDULENT_HASH`, `INACCURATE_METADATA`, `OTHER`) và yêu cầu tối thiểu 10 ký tự bằng chứng.
+  * Bảng `dbo.Reports` lưu trữ khiếu nại; bảng `dbo.ReportActions` lưu trữ toàn bộ tiến trình kiểm toán (Audit Trail timeline).
+  * Thao tác giải quyết tranh chấp on-chain từ Admin Dashboard: kích hoạt `DISPUTED`, giải quyết khôi phục `ACTIVE`, hoặc thu hồi vĩnh viễn `REVOKED`.
+  * Đồng bộ tự động 2 chiều giữa Smart Contract và bảng `dbo.CopyrightRecords` (`DISPUTED`, `ON_CHAIN`, `WITHDRAWN`).
+- Cầu dao khẩn cấp (Emergency Circuit Breaker):
+  * Admin Dashboard tích hợp Tab `GOVERNANCE` cho phép kiểm tra và tạm dừng/khôi phục Smart Contract kèm lý do giải trình.
+- Tích hợp Động cơ Lưu trữ IPFS Thực tế (IPFS Storage Engine):
+  * Tạo mới `server/services/storage/ipfsStorageProvider.ts` tính toán mã băm IPFS CIDv0 chuẩn hóa (`Qm...`, multihash SHA2-256 + Base58).
+  * Hỗ trợ lưu trữ persistent IPFS cache tại `storage/ipfs/`, kết nối Pinata API khi có JWT, và fetch từ IPFS Gateway (`https://gateway.pinata.cloud/ipfs/`).
+  * Bộ điều phối `StorageManager` (`server/services/storage/storageManager.ts`) cho phép linh hoạt chọn lưu trữ `LOCAL` hoặc `IPFS` theo từng tệp hoặc cấu hình môi trường `STORAGE_DRIVER`.
+  * Tách biệt hoàn toàn nội dung tệp lưu trữ (Local/IPFS) khỏi dữ liệu đưa lên blockchain (chỉ đưa mã băm `bytes32`).
+- Giao diện người dùng (UI/UX) và Đa ngôn ngữ:
+  * Admin Dashboard 3 tab: `INVITATIONS`, `DISPUTES`, `GOVERNANCE`.
+  * Banner cảnh báo màu hổ phách/đỏ khi tác phẩm có tranh chấp hoặc bị thu hồi tại `/book/:id` và `/verify`.
+  * Hỗ trợ song ngữ Anh - Việt 100% trong `src/i18n/vi.ts` và `src/i18n/en.ts`.
+  * Bằng chứng kiểm thử: `tests/step05_dispute_management.test.ts` (18 bài kiểm thử), `tests/step06_storage_reconciliation.test.ts` (8 bài kiểm thử).
+
+================================================================================
+3. KẾT QUẢ KIỂM THỬ TỔNG THỂ & ĐÓNG GÓI SẢN PHẨM
+================================================================================
+
+1. Kiểm thử Hệ thống (Vitest):
+   - Lệnh: `npm test`
+   - Kết quả: **8/8 test suites PASSED, 110/110 tests PASSED (100%)**
+   - Danh sách suites:
+     * `tests/step02_1_invitations.test.ts` (19 tests) -> PASS
+     * `tests/step05_dispute_management.test.ts` (18 tests) -> PASS
+     * `tests/step04_copyright_integration.test.ts` (14 tests) -> PASS
+     * `tests/step02_books.test.ts` (22 tests) -> PASS
+     * `tests/api.test.ts` (13 tests) -> PASS
+     * `tests/step06_storage_reconciliation.test.ts` (8 tests) -> PASS
+     * `tests/step03_1_wallet.test.ts` (9 tests) -> PASS
+     * `tests/step03_blockchain_utils.test.ts` (7 tests) -> PASS
+
+2. Kiểm thử Smart Contract (Hardhat Mocha):
+   - Lệnh: `npm run contracts:test`
+   - Kết quả: **29/29 tests PASSED (100%)**
+
+3. Kiểm tra Quy chuẩn Mã nguồn (Linter):
+   - Lệnh: `npm run lint` (Oxlint)
+   - Kết quả: **0 errors**
+
+4. Biên dịch TypeScript & Đóng gói Sản phẩm (Build):
+   - Lệnh: `npm run build` (`tsc -b && vite build`)
+   - Kết quả: **0 TypeScript errors, build production thành công trong 580ms**.
+
+================================================================================
+4. CỔNG NGHIỆM THU TRƯỚC SEPOLIA (PRE-SEPOLIA READINESS GATE)
+================================================================================
+
+| Tiêu chí | Yêu cầu | Kết quả thực tế | Đánh giá |
+|---|---|---|---|
+| **1. Tính toàn vẹn Local** | Toàn bộ 5 giai đoạn chạy tốt trên Hardhat Local | 110 tests Vitest + 29 tests Hardhat pass 100% | **ĐẠT (PASS)** |
+| **2. Tính nhất quán Contract & ABI** | Địa chỉ và ABI khớp giữa contracts, server và client | ABI đồng bộ trong `src/contracts` và `server/contracts` | **ĐẠT (PASS)** |
+| **3. Kiểm soát quyền & An toàn** | Phân quyền Registrar và Admin ở smart contract | AccessControl bảo vệ nghiêm ngặt mọi hàm nhạy cảm | **ĐẠT (PASS)** |
+| **4. Xử lý lỗi & Phục hồi** | Đồng bộ CSDL an toàn, cơ chế đối soát reconciliation | Đã kiểm thử `reconcilePendingTransactions()` | **ĐẠT (PASS)** |
+| **5. Cấu hình đa mạng** | Tách bạch cấu hình Local (31337) và Sepolia (11155111) | `env.ts`, `hardhat.config.cjs`, `WalletContext.tsx` hỗ trợ cả 2 mạng | **ĐẠT (PASS)** |
+| **6. Kịch bản Deploy & Cấp quyền** | Script deploy và grantRole sẵn sàng cho Sepolia | `deploy.cjs` và `grantRole.cjs` sẵn sàng | **ĐẠT (PASS)** |
+| **7. Biến môi trường Sepolia** | `SEPOLIA_RPC_URL` và `SEPOLIA_PRIVATE_KEY` có số dư | Chưa cấu hình trong `.env` (tránh rò rỉ secret) | **CHỜ CẤU HÌNH (BLOCKED)** |
+
+================================================================================
+5. KẾT LUẬN NGHIỆM THU TOÀN DIỆN
+================================================================================
+
+- Môi trường Local: Hoàn thiện 100% toàn bộ 5 giai đoạn, đạt tiêu chuẩn chất lượng sản xuất.
+- Môi trường Sepolia: Đã chuẩn bị toàn bộ kịch bản triển khai, cấu hình mạng và script quản trị; trạng thái chính thức được ghi nhận là PREPARED (Chờ người dùng cấu hình ví và RPC có số dư).
+
+KẾT LUẬN: >>> HOÀN TẤT LỘ TRÌNH 5 GIAI ĐOẠN — SẴN SÀNG CHO SEPOLIA DEPLOYMENT <<<
+================================================================================

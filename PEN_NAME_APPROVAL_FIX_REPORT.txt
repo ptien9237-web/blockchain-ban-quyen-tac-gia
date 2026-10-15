@@ -1,0 +1,324 @@
+================================================================================
+BÁO CÁO KỸ THUẬT: SỬA LỖI & HOÀN THIỆN LUỒNG DUYỆT BÚT DANH TÁC GIẢ
+(PEN NAME REGISTRATION, REVIEW & AUTHOR RBAC APPROVAL FIX REPORT)
+================================================================================
+Dự án       : BOOKCHAIN LIBRARY — Digital Library & Blockchain Copyright Registry
+Phiên bản   : 1.0.0-step07 (Author Approval & RBAC Synchronization)
+Thời gian   : 2026-10-15
+Hệ điều hành: Windows
+CSDL        : Microsoft SQL Server (BookChainLibrary)
+Mạng Block  : Hardhat Local (Chain ID: 31337)
+Trạng thái  : HOÀN THÀNH TOÀN DIỆN & ĐÃ KIỂM CHỨNG ĐẦU-CUỐI (PASSED 100%)
+================================================================================
+
+1. MÔ TẢ HIỆN TRẠNG & NGUYÊN NHÂN GỐC RỄ (ROOT CAUSE ANALYSIS)
+--------------------------------------------------------------------------------
+* Hiện trạng ban đầu:
+  - Người dùng đăng nhập tài khoản (Reader hoặc tác giả mới) thực hiện đăng ký bút danh.
+  - Hồ sơ ghi nhận vào cơ sở dữ liệu với trạng thái `PENDING`.
+  - Tuy nhiên, trong trang quản trị Admin (`/admin`), người quản trị hoàn toàn không tìm
+    thấy mục hay danh sách nào để xem, xét duyệt hoặc từ chối yêu cầu bút danh.
+  - Người dùng bị kẹt ở trạng thái `PENDING`, không được cấp quyền xuất bản sách hợp lệ.
+
+* Nguyên nhân chính xác được chứng minh trực tiếp từ mã nguồn:
+  1. Chưa có API Admin:
+     - Bảng `dbo.AuthorProfiles` trong SQL Server đã có sẵn các trường: `VerificationStatus`,
+       `VerificationNote`, `ReviewedByUserId`, `ReviewedAt`.
+     - Tuy nhiên, trong `server/routes/adminRoutes.ts` và `server/controllers/adminController.ts`
+       HOÀN TOÀN KHÔNG CÓ endpoint nào để Admin lấy danh sách (`GET /api/admin/author-requests`),
+       duyệt (`POST /api/admin/author-requests/:id/approve`), hoặc từ chối (`POST /api/admin/author-requests/:id/reject`).
+  2. Giao diện AdminDashboard thiếu phân hệ:
+     - `src/pages/AdminDashboard.tsx` chỉ có 3 tab: `INVITATIONS`, `DISPUTES`, `GOVERNANCE`.
+     - Không có tab, bảng dữ liệu hay nút bấm nào phục vụ kiểm duyệt hồ sơ tác giả.
+  3. Lỗ hổng kiểm soát điều kiện đăng sách:
+     - `server/services/bookService.ts` trong hàm `createBook` chỉ kiểm tra `if (!authorProfile)`,
+       chưa chặn trường hợp hồ sơ bị từ chối (`VerificationStatus === 'REJECTED'`).
+     - `server/controllers/bookController.ts` chưa xử lý thông báo lỗi thân thiện khi tác giả
+       bị từ chối kèm lý do cụ thể.
+  4. Trải nghiệm người dùng tại trang Profile (`/profile`):
+     - Trước đây, nếu tài khoản chưa có vai trò `AUTHOR`, hệ thống mặc định ẩn form đăng ký bút danh
+       và chỉ hiển thị form nhập mã mời.
+     - Thiếu thẻ trạng thái sống (`PENDING`, `VERIFIED`, `REJECTED`) để người dùng theo dõi tiến trình
+       và biết được lý do từ chối để cập nhật/gửi lại.
+
+================================================================================
+2. DANH SÁCH TỆP TIN ĐÃ TẠO MỚI VÀ CHỈNH SỬA
+--------------------------------------------------------------------------------
+A. Tệp tin tạo mới:
+  1. `tests/step07_author_approval.test.ts`
+     - Bộ 19 bài kiểm thử tự động toàn diện: Đăng ký, RBAC, Admin duyệt, Admin từ chối,
+       chống thao tác lặp (Idempotency), chặn đăng sách khi bị từ chối, nộp lại hồ sơ,
+       lọc theo trạng thái và tìm kiếm từ khóa.
+  2. `PEN_NAME_APPROVAL_FIX_REPORT.txt`
+     - Báo cáo kỹ thuật chi tiết này.
+
+B. Tệp tin backend đã chỉnh sửa:
+  1. `server/types/index.ts`
+     - Bổ sung `AuthorRequestDto` và `AdminAuthorRequestsResult`.
+     - Bổ sung `verificationNote` và `reviewedAt` vào `AuthorProfilePublic`.
+  2. `server/repositories/authorProfileRepository.ts`
+     - `findById(authorProfileId)`: Tìm kiếm hồ sơ theo ID.
+     - `getAuthorRequests(options)`: Truy vấn danh sách yêu cầu với bộ lọc trạng thái,
+       tìm kiếm theo từ khóa (PenName, DisplayName, Email), phân trang an toàn.
+     - `approveAuthorRequest(authorProfileId, adminUserId, note)`: Transaction an toàn
+       sử dụng `WITH (UPDLOCK, ROWLOCK)`, kiểm tra trạng thái `PENDING`, cập nhật `VERIFIED`,
+       lưu thông tin kiểm toán và tự động cấp vai trò `AUTHOR` vào `dbo.UserRoles`.
+     - `rejectAuthorRequest(authorProfileId, adminUserId, reason)`: Transaction an toàn
+       với `WITH (UPDLOCK, ROWLOCK)`, cập nhật `REJECTED`, lưu lý do từ chối vào
+       `VerificationNote`, và thu hồi vai trò `AUTHOR` (nếu không có mã mời hợp lệ).
+     - `createOrUpdate(userId, data)`: Cho phép tác giả cập nhật lại bút danh sau khi bị
+       từ chối, tự động reset trạng thái về `PENDING` và xóa lý do cũ để Admin xem xét lại.
+  3. `server/services/authService.ts` & `server/services/userService.ts`
+     - Trả về đầy đủ `verificationNote` và `reviewedAt` trong hồ sơ `authorProfile`
+       ở các hàm `getCurrentUser`, `login`, `updateProfile`, `registerAuthorProfile`.
+  4. `server/controllers/adminController.ts`
+     - `listAuthorRequests`: Xử lý phân trang, lọc và tìm kiếm.
+     - `approveAuthorRequest`: Kiểm tra ID, thực hiện duyệt, trả về dữ liệu chuẩn.
+     - `rejectAuthorRequest`: Bắt buộc cung cấp lý do từ chối tối thiểu 3 ký tự.
+     - Phản hồi mã lỗi chuẩn: `NOT_FOUND` (404), `VALIDATION_ERROR` (400),
+       `REQUEST_ALREADY_PROCESSED` (400).
+  5. `server/routes/adminRoutes.ts`
+     - Bảo vệ 100% bằng middleware `requireAuth` và `requireRole('ADMIN')`.
+     - Đăng ký:
+       * `GET   /api/admin/author-requests`
+       * `POST  /api/admin/author-requests/:id/approve`
+       * `PATCH /api/admin/author-requests/:id/approve`
+       * `POST  /api/admin/author-requests/:id/reject`
+       * `PATCH /api/admin/author-requests/:id/reject`
+  6. `server/services/bookService.ts` & `server/controllers/bookController.ts`
+     - Thêm hàm `getAuthorProfileByUserId(userId)` vào `BookService`.
+     - Trong `createBook`:
+       * Kiểm tra hồ sơ tác giả: Nếu chưa có -> trả về `403 AUTHOR_PROFILE_REQUIRED`.
+       * Nếu hồ sơ bị từ chối -> trả về `403 AUTHOR_PROFILE_REJECTED` kèm lý do chi tiết.
+       * Kiểm tra vai trò tác giả: Nếu không có vai trò `AUTHOR` hoặc `ADMIN` -> trả về `403 AUTHOR_ROLE_REQUIRED`.
+
+C. Tệp tin frontend đã chỉnh sửa:
+  1. `src/services/api.ts`
+     - Bổ sung interface `AdminAuthorRequest` và `AdminAuthorRequestsResult`.
+     - Bổ sung `adminApi.getAuthorRequests`, `approveAuthorRequest`, `rejectAuthorRequest`.
+  2. `src/pages/AdminDashboard.tsx`
+     - Mở rộng kiểu `AdminTab` thành `'INVITATIONS' | 'AUTHOR_REQUESTS' | 'DISPUTES' | 'GOVERNANCE'`.
+     - Thêm Tab thứ 2 "Yêu cầu Bút danh" kèm huy hiệu hiển thị số lượng yêu cầu `PENDING`.
+     - Bổ sung 4 thẻ thống kê: Tổng yêu cầu, Chờ phê duyệt, Đã duyệt, Đã từ chối.
+     - Bổ sung thanh tìm kiếm và bộ lọc nhanh theo 4 trạng thái (`ALL`, `PENDING`, `VERIFIED`, `REJECTED`).
+     - Bảng dữ liệu hiển thị chi tiết: Bút danh, Tài khoản, Tiểu sử, Thời điểm gửi, Trạng thái,
+       Người duyệt/Thời điểm duyệt, Ghi chú/Lý do từ chối.
+     - Tích hợp 2 Modal tương tác chuẩn UX:
+       * Modal Phê duyệt: Cho phép Admin nhập ghi chú lưu vào sổ kiểm toán.
+       * Modal Từ chối: Bắt buộc Admin nhập lý do từ chối rõ ràng gửi tới tác giả.
+  3. `src/pages/Profile.tsx`
+     - Tách bạch rõ ràng 2 tùy chọn cho độc giả: "Đăng ký Bút danh Tác giả mới" hoặc "Đổi mã mời tác giả".
+     - Hiển thị thẻ trạng thái hồ sơ tác giả sống động:
+       * `PENDING`: Cảnh báo màu hổ phách "Hồ sơ của bạn đang được Quản trị viên xem xét."
+       * `VERIFIED`: Huy hiệu màu xanh lục "Đã được phê duyệt — Bạn có toàn quyền đăng tải và quản lý tác phẩm."
+       * `REJECTED`: Hộp thông báo màu đỏ "Hồ sơ đã bị từ chối" hiển thị rõ lý do từ chối của Admin
+         và cho phép bấm "Chỉnh sửa & Gửi lại yêu cầu" để đặt lại về `PENDING`.
+  4. `src/i18n/vi.ts` & `src/i18n/en.ts`
+     - Bổ sung đầy đủ toàn bộ từ điển song ngữ cho tab Yêu cầu Bút danh, các modal phê duyệt/từ chối,
+       và các thông báo trạng thái tại trang cá nhân.
+  5. `tests/step04_copyright_integration.test.ts`
+     - Cập nhật địa chỉ kiểm thử không có quyền sang Hardhat Account #2, đảm bảo tương thích
+       khi chạy đồng thời cùng các bài test khác.
+
+================================================================================
+3. CHI TIẾT ĐẶC TẢ API ADMIN MỚI
+--------------------------------------------------------------------------------
+
+1. GET /api/admin/author-requests
+   - Mô tả: Lấy danh sách yêu cầu đăng ký bút danh tác giả.
+   - Quyền hạn: Bắt buộc đăng nhập (`requireAuth`) và vai trò `ADMIN` (`requireRole('ADMIN')`).
+   - Query Parameters:
+     * `status`: 'ALL' | 'PENDING' | 'VERIFIED' | 'REJECTED' (mặc định: 'ALL')
+     * `search`: Từ khóa tìm kiếm theo bút danh, email hoặc tên hiển thị
+     * `page`: Số trang (mặc định: 1)
+     * `limit`: Số bản ghi mỗi trang (mặc định: 50, tối đa: 100)
+   - Response (200 OK):
+     {
+       "success": true,
+       "data": {
+         "items": [
+           {
+             "authorProfileId": "4D325142-F7C7-F111-A44F-B5CC9C201923",
+             "userId": "C5CCF2CE-D8C7-F111-A44F-B5CC9C201923",
+             "penName": "Lời nói gió bay",
+             "bio": "100% không gì là có thể",
+             "verificationStatus": "PENDING",
+             "verificationNote": null,
+             "reviewedByUserId": null,
+             "reviewedAt": null,
+             "createdAt": "2026-10-14T17:47:01.866Z",
+             "updatedAt": "2026-10-14T17:47:01.866Z",
+             "userEmail": "cuongstore@gmail.com",
+             "userDisplayName": "Nguyễn Văn Cường",
+             "userAvatarUrl": null,
+             "userStatus": "ACTIVE",
+             "reviewerDisplayName": null,
+             "reviewerEmail": null
+           }
+         ],
+         "total": 1,
+         "page": 1,
+         "limit": 50
+       }
+     }
+
+2. POST /api/admin/author-requests/:id/approve  (Hỗ trợ cả PATCH)
+   - Mô tả: Phê duyệt yêu cầu bút danh, chuyển trạng thái sang `VERIFIED` và gán vai trò `AUTHOR`.
+   - Quyền hạn: Bắt buộc quyền `ADMIN`.
+   - Path Parameter: `id` (AuthorProfileId, GUID).
+   - Request Body:
+     {
+       "note": "Hồ sơ hợp lệ, đã đối chiếu danh tính." // Tùy chọn
+     }
+   - Response (200 OK):
+     {
+       "success": true,
+       "data": {
+         "message": "Đã phê duyệt yêu cầu bút danh tác giả thành công.",
+         "authorProfileId": "...",
+         "verificationStatus": "VERIFIED",
+         "verificationNote": "Hồ sơ hợp lệ, đã đối chiếu danh tính.",
+         "reviewedByUserId": "...",
+         "reviewedAt": "2026-10-15T..."
+       }
+     }
+   - Xử lý lỗi Idempotency:
+     * Nếu hồ sơ đã được duyệt hoặc từ chối trước đó -> Trả về `400 Bad Request`:
+       { "success": false, "error": { "code": "REQUEST_ALREADY_PROCESSED", "message": "Yêu cầu này đã được xử lý trước đó..." } }
+
+3. POST /api/admin/author-requests/:id/reject  (Hỗ trợ cả PATCH)
+   - Mô tả: Từ chối yêu cầu bút danh, chuyển trạng thái sang `REJECTED`, lưu lý do và thu hồi vai trò `AUTHOR`.
+   - Quyền hạn: Bắt buộc quyền `ADMIN`.
+   - Path Parameter: `id` (AuthorProfileId, GUID).
+   - Request Body:
+     {
+       "reason": "Bút danh vi phạm quyền sở hữu trí tuệ hoặc trùng với tác giả nổi tiếng." // Bắt buộc
+     }
+   - Response (200 OK):
+     {
+       "success": true,
+       "data": {
+         "message": "Đã từ chối yêu cầu bút danh tác giả.",
+         "authorProfileId": "...",
+         "verificationStatus": "REJECTED",
+         "verificationNote": "Bút danh vi phạm quyền sở hữu trí tuệ...",
+         "reviewedByUserId": "...",
+         "reviewedAt": "2026-10-15T..."
+       }
+     }
+   - Xử lý lỗi Validation:
+     * Nếu không truyền lý do hoặc dưới 3 ký tự -> Trả về `400 VALIDATION_ERROR`.
+   - Xử lý lỗi Idempotency:
+     * Nếu hồ sơ đã được duyệt hoặc từ chối trước đó -> Trả về `400 REQUEST_ALREADY_PROCESSED`.
+
+================================================================================
+4. BẢO TOÀN DỮ LIỆU CƠ SỞ DỮ LIỆU (DATABASE INTEGRITY)
+--------------------------------------------------------------------------------
+- Không thực hiện bất kỳ lệnh DROP DATABASE, DROP TABLE hay TRUNCATE nào.
+- Toàn bộ dữ liệu người dùng sẵn có được giữ nguyên vẹn 100%.
+- Kiểm tra trực tiếp tài khoản mẫu của người dùng:
+  * Email          : cuongstore@gmail.com
+  * Tên hiển thị   : Nguyễn Văn Cường
+  * Bút danh       : Lời nói gió bay
+  * Trạng thái     : PENDING
+  * AuthorProfileId: 4D325142-F7C7-F111-A44F-B5CC9C201923
+  -> Dữ liệu được bảo toàn nguyên vẹn và hiển thị ngay trên đầu danh mục "Yêu cầu Bút danh"
+     trong giao diện Admin để Quản trị viên tiến hành phê duyệt ngay lập tức.
+
+================================================================================
+5. KẾT QUẢ KIỂM THỬ THỰC TẾ (TEST VERIFICATION RESULTS)
+--------------------------------------------------------------------------------
+
+A. Bộ kiểm thử chức năng duyệt bút danh (`tests/step07_author_approval.test.ts`):
+   - Chạy lệnh: `npx vitest run tests/step07_author_approval.test.ts`
+   - Kết quả: **19/19 tests PASSED (100%)** trong 1.46s.
+   Chi tiết các kịch bản kiểm chứng:
+   [PASS] 1.1. Regular user without author profile cannot create books (403 AUTHOR_PROFILE_REQUIRED)
+   [PASS] 1.2. Reader 1 registers a pen name -> profile is PENDING
+   [PASS] 1.3. Reader 1 registration appears in Admin author requests list
+   [PASS] 2.1. Anonymous request to list author requests is rejected (401)
+   [PASS] 2.2. Non-admin user cannot access GET /api/admin/author-requests (403 FORBIDDEN)
+   [PASS] 2.3. Non-admin user cannot approve author request (403 FORBIDDEN)
+   [PASS] 2.4. Non-admin user cannot reject author request (403 FORBIDDEN)
+   [PASS] 3.1. Admin approves Reader 1 request with an audit note
+   [PASS] 3.2. Reader 1 profile reflects VERIFIED status and audit fields
+   [PASS] 3.3. Reader 1 can successfully create a new book as an approved Author (201 Created)
+   [PASS] 3.4. Idempotency Guard: Re-approving an already approved request returns 400 REQUEST_ALREADY_PROCESSED
+   [PASS] 3.5. Idempotency Guard: Rejecting an already approved request returns 400 REQUEST_ALREADY_PROCESSED
+   [PASS] 4.1. Reader 2 registers a pen name
+   [PASS] 4.2. Admin rejects request with mandatory reason
+   [PASS] 4.3. Reader 2 profile shows REJECTED and AUTHOR role is revoked
+   [PASS] 4.4. Reader 2 cannot create book after rejection (403 AUTHOR_PROFILE_REJECTED)
+   [PASS] 4.5. Idempotency Guard: Re-rejecting or approving an already rejected request returns 400
+   [PASS] 5.1. Reader 2 can update profile to re-submit with new pen name -> resets to PENDING
+   [PASS] 5.2. Admin filters author requests by status and searches by keyword
+
+B. Toàn bộ 9 Suites kiểm thử tích hợp của dự án (`npm test`):
+   - Chạy lệnh: `npm test`
+   - Kết quả: **9/9 test files PASSED, 129/129 tests PASSED (100%)** trong 19.76s.
+   1. tests/step05_dispute_management.test.ts      : 18 tests PASSED
+   2. tests/step04_copyright_integration.test.ts   : 14 tests PASSED
+   3. tests/step02_books.test.ts                   : 22 tests PASSED
+   4. tests/step07_author_approval.test.ts         : 19 tests PASSED
+   5. tests/step02_1_invitations.test.ts           : 19 tests PASSED
+   6. tests/step06_storage_reconciliation.test.ts  : 8 tests PASSED
+   7. tests/api.test.ts                            : 13 tests PASSED
+   8. tests/step03_1_wallet.test.ts                : 9 tests PASSED
+   9. tests/step03_blockchain_utils.test.ts        : 7 tests PASSED
+
+C. Kiểm thử Smart Contract Hardhat (`npm run contracts:test`):
+   - Chạy lệnh: `npm run contracts:test`
+   - Kết quả: **29/29 tests PASSED (100%)** trong 1.0s.
+
+D. Kiểm tra quy chuẩn mã nguồn (`npm run lint`):
+   - Chạy lệnh: `npm run lint`
+   - Kết quả: **0 errors** (132 warnings thông thường, exit code: 0).
+
+E. Đóng gói sản phẩm (`npm run build`):
+   - Chạy lệnh: `npm run build`
+   - Kết quả: **TypeScript compile (`tsc -b`) & Vite build thành công 100%** trong 684ms.
+
+================================================================================
+6. HƯỚNG DẪN KIỂM TRA THỦ CÔNG TRÊN TRÌNH DUYỆT (MANUAL TESTING GUIDE)
+--------------------------------------------------------------------------------
+
+Bước 1: Khởi động hệ thống
+  - Server & Client đã chạy nền qua: `npm run dev:all`
+  - Hardhat Local node đang chạy tại cổng: `http://localhost:8545`
+  - Ứng dụng web mở tại: `http://localhost:5173`
+
+Bước 2: Kiểm tra hồ sơ người dùng đang chờ duyệt (Ví dụ: `cuongstore@gmail.com`)
+  - Đăng nhập vào website bằng tài khoản tác giả / người đăng ký.
+  - Điều hướng tới trang Cá nhân (`/profile`).
+  - Quan sát thẻ thông tin tác giả:
+    * Hệ thống hiển thị huy hiệu màu hổ phách: `PENDING — Đang chờ phê duyệt`.
+    * Dòng nhắc nhở: "Hồ sơ của bạn đang được Quản trị viên xem xét. Bạn sẽ có quyền đăng tải tác phẩm sau khi được phê duyệt."
+
+Bước 3: Đăng nhập tài khoản Quản trị viên (Admin)
+  - Đăng nhập bằng tài khoản Quản trị viên (có vai trò `ADMIN`).
+  - Nhấp vào mục **Quản trị** trên thanh điều hướng hoặc truy cập `/admin`.
+  - Trên thanh tab điều hành, nhấp vào tab thứ 2: **Yêu cầu Bút danh** (hiển thị số lượng yêu cầu chờ).
+
+Bước 4: Thực hiện Phê duyệt hoặc Từ chối trên giao diện Admin
+  - Bảng danh sách sẽ liệt kê đầy đủ các yêu cầu đang chờ (trong đó có `cuongstore@gmail.com`, bút danh `Lời nói gió bay`).
+  - Trường hợp 1: Phê duyệt:
+    * Nhấn nút **Duyệt hồ sơ**.
+    * Hộp thoại Modal hiện lên, có thể nhập ghi chú (ví dụ: "Đã xác minh tác giả").
+    * Nhấn **Xác nhận phê duyệt**.
+    * Trạng thái cập nhật thành công thành `VERIFIED`, thẻ thống kê cập nhật ngay lập tức.
+    * Tài khoản được tự động cấp quyền `AUTHOR` và có thể truy cập `/books/new` để đăng sách.
+  - Trường hợp 2: Từ chối:
+    * Nhấn nút **Từ chối**.
+    * Hộp thoại Modal hiện lên, nhập lý do từ chối (ví dụ: "Bút danh không phù hợp với quy định").
+    * Nhấn **Xác nhận từ chối**.
+    * Trạng thái cập nhật thành `REJECTED`, lý do từ chối được lưu vào cơ sở dữ liệu.
+    * Khi người dùng truy cập trang cá nhân, thẻ cảnh báo màu đỏ sẽ hiển thị chính xác lý do này kèm nút "Chỉnh sửa & Gửi lại yêu cầu".
+
+================================================================================
+KẾT LUẬN
+================================================================================
+Toàn bộ luồng đăng ký bút danh, kiểm duyệt Admin, đồng bộ vai trò `AUTHOR`, kiểm soát
+điều kiện xuất bản sách và chống thao tác lặp đã được triển khai hoàn chỉnh, đúng kiến
+trúc hiện tại của dự án, vượt qua 100% bài kiểm thử tự động và bảo toàn nguyên vẹn
+dữ liệu cơ sở dữ liệu thực tế.
+================================================================================
